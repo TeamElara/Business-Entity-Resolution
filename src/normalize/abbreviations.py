@@ -8,7 +8,7 @@ available to downstream matching. French-specific rules belong to Phase 11.
 
 import polars as pl
 
-from .basic_text import clean_text
+from .basic_text import clean_text, strip_accents
 
 NAME_ABBREVIATIONS = {
     "pvt": "private",
@@ -28,6 +28,28 @@ ADDRESS_ABBREVIATIONS = {
     "flr": "floor",
     "apt": "apartment",
 }
+
+# France-specific street abbreviations seen in the unlabeled French test
+# inputs. "st" is Saint/Sainte there, not the generic English "street".
+FRANCE_ADDRESS_ABBREVIATIONS = {
+    **ADDRESS_ABBREVIATIONS,
+    "st": "saint",
+    "ste": "sainte",
+    "bd": "boulevard",
+    "av": "avenue",
+    "pl": "place",
+    "imp": "impasse",
+}
+
+# Bare R and CH are ambiguous (initials and hospital abbreviations). Expand
+# them only in an address segment's street position, before punctuation is
+# removed. CH additionally requires a house number for precision.
+FRANCE_STREET_HOUSE = (
+    r"(?:n[°ºo]\.?\s*|#\s*)?\(?\d{1,5}\)?"
+    r"(?:\s*(?:bis|ter|[a-z]))?\s*(?:-\s*)?"
+)
+FRANCE_R_STREET = rf"(?i)(^|[,;]\s*)((?:{FRANCE_STREET_HOUSE})?)r\.?\s+"
+FRANCE_CH_STREET = rf"(?i)(^|[,;]\s*)({FRANCE_STREET_HOUSE})ch\.?\s+"
 
 # Punctuation cleaning splits dotted legal acronyms into separate letters.
 # Reassemble only complete, space-delimited sequences; never change letters
@@ -65,3 +87,18 @@ def normalize_name_expr(raw: pl.Expr) -> pl.Expr:
     return normalize_dotted_legal_forms(
         expand_tokens(clean_text(raw), NAME_ABBREVIATIONS)
     )
+
+
+def normalize_address_expr(raw: pl.Expr, country: pl.Expr) -> pl.Expr:
+    """Generic addresses plus guarded French street and accent rules."""
+    key = country.cast(pl.String).fill_null("").str.to_lowercase()
+    generic = expand_tokens(clean_text(raw), ADDRESS_ABBREVIATIONS)
+    french_streets = (
+        raw.cast(pl.String).fill_null("")
+        .str.replace_all(FRANCE_R_STREET, "${1}${2}rue ")
+        .str.replace_all(FRANCE_CH_STREET, "${1}${2}chemin ")
+    )
+    french = strip_accents(
+        expand_tokens(clean_text(french_streets), FRANCE_ADDRESS_ABBREVIATIONS)
+    )
+    return pl.when(key == "france").then(french).otherwise(generic)

@@ -1,5 +1,9 @@
 # Normalization checkpoint — Phases 6–8
 
+This is a historical Phase 6–8 snapshot. For current Hindi `name_latin` and
+France behavior, see `docs/phase10_transliteration.md` and
+`docs/phase11_france.md`.
+
 Run on 25 Sep 2026 with `python -m src.normalize.run --split all` against the
 provided dataset. Six Parquet files contain **24,229,173 rows** in total. The
 sum of per-source processing times was **120.9 seconds** on this machine. A

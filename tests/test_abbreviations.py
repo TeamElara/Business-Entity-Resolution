@@ -12,7 +12,8 @@ def test_fallback_and_field_separation(country):
                        'country': [country]})
     result = normalize_df(df)
     assert result['name_norm'][0] == 'acme private limited corporation incorporated st'
-    assert result['addr_norm'][0] == '12 road street avenue boulevard lane highway building floor apartment pvt'
+    expected_st = 'saint' if country == 'France' else 'street'
+    assert result['addr_norm'][0] == f'12 road {expected_st} avenue boulevard lane highway building floor apartment pvt'
     assert_frame_equal(result.select(df.columns), df)
     assert_frame_equal(normalize_df(result), result)
 

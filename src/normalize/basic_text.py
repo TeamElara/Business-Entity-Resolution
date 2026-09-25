@@ -15,3 +15,13 @@ def clean_text(expr: pl.Expr) -> pl.Expr:
         .str.replace_all(r"\s+", " ")
         .str.strip_chars()
     )
+
+
+def strip_accents(expr: pl.Expr) -> pl.Expr:
+    """Fold accents and common French ligatures without changing raw text."""
+    return (
+        expr.str.normalize("NFD")
+        .str.replace_all(r"\p{M}", "")
+        .str.replace_all("œ", "oe", literal=True)
+        .str.replace_all("æ", "ae", literal=True)
+    )

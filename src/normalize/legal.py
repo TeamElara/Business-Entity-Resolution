@@ -1,4 +1,4 @@
-"""Detect trailing legal forms without changing the full normalized name."""
+"""Detect legal forms without changing the full normalized name."""
 
 import re
 
@@ -30,16 +30,31 @@ LEGAL_FORMS = (
     ("sa", "sa"),
 )
 
+FRANCE_PREFIX_FORMS = ("sarl", "sas", "sasu", "sa", "eurl", "sci", "snc")
 
-def legal_suffix_and_core(name_norm: pl.Expr) -> tuple[pl.Expr, pl.Expr]:
-    """Return `(name_core, legal_suffix)` for names with a trailing form.
+
+def legal_suffix_and_core(
+    name_norm: pl.Expr, country: pl.Expr | None = None
+) -> tuple[pl.Expr, pl.Expr]:
+    """Return `(name_core, legal_suffix)` for names with a legal form.
 
     A form only counts when at least one name token remains before it. Thus a
     business literally named `Limited` is not reduced to an empty core.
+    France also recognizes leading forms when no trailing form was found.
     """
     variants = "|".join(
         re.escape(phrase).replace(r"\ ", r"\s+") for phrase, _ in LEGAL_FORMS
     )
     suffix = name_norm.str.extract(rf"^.+?\s+({variants})$", 1).replace(dict(LEGAL_FORMS))
     core = name_norm.str.replace(rf"^(.+?)\s+(?:{variants})$", "${1}")
-    return core, suffix
+    if country is None:
+        return core, suffix
+    french = country.cast(pl.String).fill_null("").str.to_lowercase() == "france"
+    prefix_variants = "|".join(FRANCE_PREFIX_FORMS)
+    prefix = name_norm.str.extract(rf"^({prefix_variants})\s+.+$", 1)
+    prefix_core = name_norm.str.replace(rf"^(?:{prefix_variants})\s+(.+)$", "${1}")
+    use_prefix = french & suffix.is_null() & prefix.is_not_null()
+    return (
+        pl.when(use_prefix).then(prefix_core).otherwise(core),
+        pl.when(use_prefix).then(prefix).otherwise(suffix),
+    )

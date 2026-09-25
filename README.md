@@ -182,6 +182,25 @@ Devanagari candidates. The machine-local JSON is
 are in `docs/phase10_transliteration.md`. This is a candidate-ranking
 diagnostic, not the final matching model or challenge score.
 
+## Phase 11 France rules
+
+France-specific normalization is based on unlabeled France rows in the three
+test sources. Run `.\.venv\Scripts\python.exe -m src.normalize.run --split test`
+to refresh the affected Parquet files. French addresses expand `R.`/`R` to
+`rue` and `CH.`/`CH` to `chemin` only in guarded street positions; `BD`, `AV`,
+`PL`, and `IMP` expand as whole tokens. French `St`/`Ste` becomes
+`saint`/`sainte` rather than the generic English `street`. French names,
+addresses, and city values fold accents and common ligatures; raw values are
+preserved. French legal forms are separated when they appear at either the
+start or end of a name. A compact `59046Lille Cedex`-style postal segment is
+recognized, while five-digit house/CS/BP numbers are not treated as postcodes
+without sufficient context. Leading zeros in house numbers remain strings.
+
+The full-data format audit, counts, country-regression check, and limits are
+in `docs/phase11_france.md`. France has no supplied match labels, so these
+checks do not establish a France match score; postcode coverage remains very
+low and cannot be a required blocking key.
+
 ## Team ownership
 
 - `src/normalize/`: Mahatva
