@@ -25,9 +25,20 @@ data/raw/test/test_source3.tsv
 
 All TSV columns must be read as strings with a tab separator and quoting disabled.
 
+## Normalization EDA
+
+Run the reproducible sampling and source-quality report from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.normalize.eda
+```
+
+This inspects 300 rows per split/source/country group and 200 true matched pairs. Detailed findings are
+maintained in `docs/eda_notes.md`; the raw local inspection files are written under the gitignored
+`data/eda/` directory.
+
 ## Ownership
 
 - `src/normalize/`: Mahatva
 - `src/blocking/`: Ojaswi
 - `src/matching/` and `src/common/`: Arihant
-
