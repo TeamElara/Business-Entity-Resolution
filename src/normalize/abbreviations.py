@@ -8,6 +8,8 @@ available to downstream matching. French-specific rules belong to Phase 11.
 
 import polars as pl
 
+from .basic_text import clean_text
+
 NAME_ABBREVIATIONS = {
     "pvt": "private",
     "ltd": "limited",
@@ -56,3 +58,10 @@ def normalize_dotted_legal_forms(expr: pl.Expr) -> pl.Expr:
             rf"(^| ){spaced}($| )", rf"${{1}}{joined}${{2}}"
         )
     return expr
+
+
+def normalize_name_expr(raw: pl.Expr) -> pl.Expr:
+    """Shared name expression for the normalizer and raw-only map training."""
+    return normalize_dotted_legal_forms(
+        expand_tokens(clean_text(raw), NAME_ABBREVIATIONS)
+    )

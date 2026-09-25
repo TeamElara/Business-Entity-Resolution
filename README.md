@@ -115,12 +115,15 @@ rarely includes explicit postcodes, so null is preferable to an unreliable
 blocking key. `city` and `house_no` are best-effort fields; inspect
 `docs/normalization_report.md` for fill rates and known limitations.
 
-Phase 7 labels names `latin`, `devanagari`, or `other`. `name_latin` is currently
-accent-stripped `name_core` for Latin names and empty for non-Latin names;
-cross-script transliteration is planned for Phase 10, and an empty string must
-not be interpreted as a comparable Latin name.
+Phase 7 labels names `latin`, `devanagari`, or `other` from characters, not
+country labels. Phase 10 fills `name_latin`: accent-stripped `name_core` for
+Latin names, and learned Hindi/Devanagari-to-Latin output for Devanagari names.
+Other non-Latin scripts remain empty; an empty value is not comparable Latin.
 
-Phase 8 produces all six files in one bounded-memory command:
+Phase 8 produces all six files in one bounded-memory command. If the local
+Hindi map is missing, the command first learns it from **non-validation**
+training matches in the raw TSVs; no generated Parquet files are needed for
+that step:
 
 ```powershell
 .\.venv\Scripts\python.exe -m src.normalize.run --split all
@@ -131,6 +134,13 @@ to adjust memory use (default 100,000). The runner writes each source atomically
 to `data/norm/{split}_s{1,2,3}.parquet`, plus a JSON run/fill-rate report in the
 same directory. Every Parquet column is a nullable string. Generated files are
 excluded from Git; teammates run the command against their own local dataset.
+
+To retrain the gitignored map explicitly (for example after raw data changes),
+run `.\.venv\Scripts\python.exe -m src.normalize.train_transliteration`,
+then rerun normalization. The map aligns equal-length Hindi/Latin matched
+training name tokens, accepts the majority Latin form at confidence ≥0.60,
+and uses a small built-in Unicode romanization fallback for unseen/ambiguous
+Devanagari tokens. No external transliteration package or license is used.
 
 Phase 5 removes recognized *trailing* legal forms into `name_core` and records
 their canonical value in `legal_suffix`. This covers India, US and French forms
@@ -156,6 +166,21 @@ by raw versus normalized name similarity. The local JSON output is
 `docs/phase09_validation.md`. Use `--max-queries-per-country N` only for a
 deterministic diagnostic sample, not for headline metrics. This is not the
 final challenge score or a test-set result.
+
+## Phase 10 Hindi-to-Latin validation
+
+After generating the train Parquet files, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.normalize.evaluate_transliteration --threads 4
+```
+
+This reports held-out Hindi/Latin true-pair agreement and re-ranks the same
+full-India raw-text TF-IDF top-50 candidate pool with/without `name_latin` for
+Devanagari candidates. The machine-local JSON is
+`data/eda/phase10_metrics.json`; measured results, denominator, and caveats
+are in `docs/phase10_transliteration.md`. This is a candidate-ranking
+diagnostic, not the final matching model or challenge score.
 
 ## Team ownership
 

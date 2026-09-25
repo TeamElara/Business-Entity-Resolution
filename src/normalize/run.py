@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 
 from src.common.io import REPO_ROOT, source_path
 from .basic import normalize_df
+from .transliteration import load_token_map, train_and_write_map
 
 
 CONTRACT = (
@@ -31,10 +32,16 @@ def _batch_counts(frame: pl.DataFrame, stats: dict) -> None:
         pl.col("postcode").is_not_null().sum().alias("postcode"),
         pl.col("city").is_not_null().sum().alias("city"),
         pl.col("house_no").is_not_null().sum().alias("house_no"),
+        (pl.col("script") == "devanagari").sum().alias("devanagari"),
+        ((pl.col("script") == "devanagari") & (pl.col("name_latin") != ""))
+        .sum().alias("devanagari_latin_filled"),
     )
     for row in grouped.iter_rows(named=True):
         country = row["country"] or "<missing>"
-        for field in ("rows", "postcode", "city", "house_no"):
+        for field in (
+            "rows", "postcode", "city", "house_no", "devanagari",
+            "devanagari_latin_filled",
+        ):
             stats[country][field] += row[field]
 
 
@@ -50,12 +57,14 @@ def normalize_source(split: str, source: int, output_dir: Path, batch_size: int)
         empty_string_is_null=True,
     ).collect_batches(chunk_size=batch_size)
     stats = defaultdict(lambda: defaultdict(int))
+    token_map = load_token_map(output_dir / "hi_latin_map.json")
+    print(f"{split} S{source}: Hindi map {len(token_map)} tokens", flush=True)
     rows = 0
     writer = None
     started = time.perf_counter()
     try:
         for batch in batches:
-            normalized = normalize_df(batch).select(
+            normalized = normalize_df(batch, transliteration_map=token_map).select(
                 pl.col(column).cast(pl.String) for column in CONTRACT
             )
             table = normalized.to_arrow()
@@ -80,6 +89,7 @@ def normalize_source(split: str, source: int, output_dir: Path, batch_size: int)
     result = {
         "split": split, "source": source, "rows": rows,
         "seconds": round(elapsed, 2), "path": str(dest),
+        "transliteration_map_tokens": len(token_map),
         "by_country": {country: dict(counts) for country, counts in sorted(stats.items())},
     }
     print(f"{split} S{source}: done, {rows:,} rows in {elapsed:.1f}s -> {dest}", flush=True)
@@ -95,6 +105,11 @@ def main() -> None:
     if args.batch_size < 1:
         parser.error("--batch-size must be positive")
     splits = ("train", "test") if args.split == "all" else (args.split,)
+    map_path = args.output_dir / "hi_latin_map.json"
+    if not map_path.is_file():
+        print("Training Hindi token map from non-validation raw pairs", flush=True)
+        stats = train_and_write_map(map_path)
+        print(f"Learned {stats['accepted_token_mappings']} Hindi tokens", flush=True)
     results = [
         normalize_source(split, source, args.output_dir, args.batch_size)
         for split in splits for source in (1, 2, 3)

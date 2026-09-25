@@ -1,5 +1,7 @@
 """Smoke test the actual TSV-to-Parquet runner on a tiny source."""
 
+import sys
+
 import polars as pl
 import pyarrow.parquet as pq
 
@@ -26,3 +28,27 @@ def test_normalize_source_contract_and_stats(tmp_path, monkeypatch):
     assert frame.columns == list(run.CONTRACT)
     assert all(frame.schema[name] == pl.String for name in run.CONTRACT)
     assert frame["entity_id"].to_list() == ["a", "b", "c"]
+
+
+def test_run_builds_missing_hindi_map_before_sources(tmp_path, monkeypatch):
+    output = tmp_path / "norm"
+    events = []
+
+    def train(path):
+        assert path == output / "hi_latin_map.json"
+        events.append("train")
+        path.parent.mkdir(parents=True)
+        path.write_text('{"tokens": {"स्काई": "sky"}}', encoding="utf-8")
+        return {"accepted_token_mappings": 1}
+
+    def source(split, number, output_dir, batch_size):
+        assert output_dir == output
+        assert batch_size == 100_000
+        events.append(f"{split}_s{number}")
+        return {"split": split, "source": number, "rows": 0}
+
+    monkeypatch.setattr(run, "train_and_write_map", train)
+    monkeypatch.setattr(run, "normalize_source", source)
+    monkeypatch.setattr(sys, "argv", ["normalize.run", "--split", "test", "--output-dir", str(output)])
+    run.main()
+    assert events == ["train", "test_s1", "test_s2", "test_s3"]

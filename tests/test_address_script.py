@@ -51,13 +51,14 @@ def test_city_and_house_fields():
     assert row["postcode"] is None and row["city"] is None and row["house_no"] is None
 
 
-def test_script_and_interim_latin():
+def test_script_and_latin_name():
     latin = _one("Paris", "France", "École SARL")
     assert latin["script"] == "latin"
     assert latin["name_latin"] == "ecole"
     indic = _one("Pune", "India", "भारत ट्रेडर्स")
     assert indic["script"] == "devanagari"
-    assert indic["name_latin"] == ""
+    assert indic["name_latin"]
+    assert indic["name_latin"].isascii()
     other = _one("Chennai", "India", "தமிழ் கடை")
     assert other["script"] == "other"
     assert other["name_latin"] == ""

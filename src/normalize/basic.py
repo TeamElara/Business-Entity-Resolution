@@ -4,30 +4,31 @@ import polars as pl
 
 from .abbreviations import (
     ADDRESS_ABBREVIATIONS,
-    NAME_ABBREVIATIONS,
     expand_tokens,
-    normalize_dotted_legal_forms,
+    normalize_name_expr,
 )
 from .address import address_fields
 from .basic_text import clean_text
 from .legal import legal_suffix_and_core
-from .script import interim_latin_name, script_expr
+from .script import script_expr, with_latin_names
+from .transliteration import load_token_map
 
 
-def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
+def normalize_df(
+    df: pl.DataFrame, transliteration_map: dict[str, str] | None = None
+) -> pl.DataFrame:
     """Preserve inputs and add raw/cleaned columns for names and addresses.
 
-    Raw columns preserve original strings, including nulls. Transliterating
-    non-Latin names is deferred to Phase 10; their interim name_latin is empty.
-    Repeated calls recompute from original business columns, so are idempotent.
+    Raw columns preserve original strings, including nulls. Devanagari tokens
+    use the non-validation training map when available, plus a deterministic
+    fallback. Other non-Latin scripts remain empty in name_latin. Repeated
+    calls recompute from original business columns, so are idempotent.
     """
     required = {"business_name", "business_address"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
-    name_norm = normalize_dotted_legal_forms(
-        expand_tokens(clean_text(pl.col("business_name")), NAME_ABBREVIATIONS)
-    )
+    name_norm = normalize_name_expr(pl.col("business_name"))
     base = df.with_columns(
         pl.col("business_name").alias("name_raw"),
         pl.col("business_address").alias("address_raw"),
@@ -46,6 +47,5 @@ def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
         house_no.alias("house_no"),
         script_expr(pl.col("business_name")).alias("script"),
     )
-    return with_fields.with_columns(
-        interim_latin_name(pl.col("name_core"), pl.col("script")).alias("name_latin")
-    )
+    token_map = load_token_map() if transliteration_map is None else transliteration_map
+    return with_latin_names(with_fields, token_map)

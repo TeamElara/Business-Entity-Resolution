@@ -2,6 +2,8 @@
 
 import polars as pl
 
+from .transliteration import transliterate_name
+
 
 def script_expr(name: pl.Expr) -> pl.Expr:
     """Classify names as latin, devanagari, or other.
@@ -21,11 +23,37 @@ def script_expr(name: pl.Expr) -> pl.Expr:
 
 
 def interim_latin_name(name_core: pl.Expr, script: pl.Expr) -> pl.Expr:
-    """Latin core with accents removed; other scripts await Phase 10.
+    """Latin core with accents removed; other scripts need a later pass.
 
-    The schema requires a string `name_latin` now. An empty value represents
-    an unavailable transliteration rather than falsely labelling Indic text
-    as Latin. Later phases will fill these values.
+    Devanagari is filled by `with_latin_names` below. Other non-Latin scripts
+    retain an empty value rather than being mislabelled as Latin.
     """
     latin = name_core.str.normalize("NFD").str.replace_all(r"\p{M}", "")
     return pl.when(script == "latin").then(latin).otherwise(pl.lit(""))
+
+
+def with_latin_names(frame: pl.DataFrame, token_map: dict[str, str]) -> pl.DataFrame:
+    """Fill name_latin, evaluating Python only on Devanagari rows."""
+    base = frame.with_columns(
+        interim_latin_name(pl.col("name_core"), pl.col("script")).alias("name_latin")
+    )
+    if base.is_empty() or not base.select((pl.col("script") == "devanagari").any()).item():
+        return base
+    indexed = base.with_row_index("__normalize_row")
+    hindi = indexed.filter(pl.col("script") == "devanagari").select(
+        "__normalize_row",
+        pl.col("name_core").map_elements(
+            lambda value: transliterate_name(value, token_map), return_dtype=pl.String
+        ).alias("__hindi_latin"),
+    )
+    return (
+        indexed.join(hindi, on="__normalize_row", how="left")
+        .with_columns(
+            pl.when(pl.col("script") == "devanagari")
+            .then(pl.col("__hindi_latin"))
+            .otherwise(pl.col("name_latin"))
+            .alias("name_latin")
+        )
+        .sort("__normalize_row")
+        .drop("__normalize_row", "__hindi_latin")
+    )

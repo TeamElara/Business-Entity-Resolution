@@ -99,6 +99,7 @@ def load_pair_frame(val: pl.DataFrame, norm_dir: Path) -> pl.DataFrame:
         pl.col("entity_id").alias("s1_id"), "country",
         pl.col("name_raw").alias("s1_raw"),
         pl.col("name_core").alias("s1_core"),
+        pl.col("name_latin").alias("s1_latin"),
         pl.col("postcode").alias("s1_postcode"),
         pl.col("script").alias("s1_script"),
     )
@@ -108,6 +109,7 @@ def load_pair_frame(val: pl.DataFrame, norm_dir: Path) -> pl.DataFrame:
             pl.col("entity_id").alias("cand_id"),
             pl.col("name_raw").alias("cand_raw"),
             pl.col("name_core").alias("cand_core"),
+            pl.col("name_latin").alias("cand_latin"),
             pl.col("postcode").alias("cand_postcode"),
             pl.col("script").alias("cand_script"),
         ) for source in (2, 3)
