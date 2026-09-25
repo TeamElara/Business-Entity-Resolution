@@ -37,9 +37,7 @@ This inspects 300 rows per split/source/country group and 200 true matched pairs
 maintained in `docs/eda_notes.md`; the raw local inspection files are written under the gitignored
 `data/eda/` directory.
 
-## Ownership
-
-## Phase 3 basic normalization
+## Phase 3 and 4 normalization
 
 ```python
 from src.normalize import normalize_df
@@ -50,10 +48,17 @@ Adds `name_raw`, `address_raw`, `name_norm`, and `addr_norm`, preserving input
 columns and row order. Raw fields retain original nulls; cleaned missing values
 become empty strings. Cleaning applies NFKC, lowercase, ampersand expansion,
 punctuation/symbol separation, and whitespace collapse. Unicode combining marks
-are retained for Indic scripts. Abbreviations, legal forms, address parsing,
+are retained for Indic scripts. Legal forms, address parsing,
 transliteration and the final Parquet CLI are subsequent phases.
 
 Run checks with `.\.venv\Scripts\python.exe -m pytest -q`.
+
+Phase 4 expands complete cleaned tokens only. Names: `pvt`, `ltd`, `corp`,
+`inc`. Addresses: `rd`, `st`, `ave`, `blvd`, `ln`, `hwy`, `bldg`, `flr`, `apt`.
+The maps are field-specific and apply to all countries, including unknown labels.
+Ambiguous forms such as `co`, `in`, `sa`, and `no` remain unchanged. `st` uses
+the planned street convention, which can misinterpret Saint; raw text is retained.
+French-specific rules and legal-suffix removal are not implemented yet.
 
 ## Team ownership
 

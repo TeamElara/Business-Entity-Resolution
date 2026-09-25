@@ -1,6 +1,8 @@
-"""Phase 3: deterministic basic cleaning without abbreviation expansion."""
+"""Deterministic basic cleaning and Phase 4 abbreviation expansion."""
 
 import polars as pl
+
+from .abbreviations import ADDRESS_ABBREVIATIONS, NAME_ABBREVIATIONS, expand_tokens
 
 
 def clean_text(expr: pl.Expr) -> pl.Expr:
@@ -24,7 +26,7 @@ def clean_text(expr: pl.Expr) -> pl.Expr:
 def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
     """Preserve inputs and add raw/cleaned columns for names and addresses.
 
-    Raw columns preserve original strings, including nulls. This Phase 3
+    Raw columns preserve original strings, including nulls. This Phase 4
     implementation does not yet produce the full final normalization contract.
     Repeated calls recompute from original business columns, so are idempotent.
     """
@@ -35,6 +37,6 @@ def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
     return df.with_columns(
         pl.col("business_name").alias("name_raw"),
         pl.col("business_address").alias("address_raw"),
-        clean_text(pl.col("business_name")).alias("name_norm"),
-        clean_text(pl.col("business_address")).alias("addr_norm"),
+        expand_tokens(clean_text(pl.col("business_name")), NAME_ABBREVIATIONS).alias("name_norm"),
+        expand_tokens(clean_text(pl.col("business_address")), ADDRESS_ABBREVIATIONS).alias("addr_norm"),
     )

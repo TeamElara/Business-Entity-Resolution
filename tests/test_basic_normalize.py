@@ -3,6 +3,7 @@ import pytest
 from polars.testing import assert_frame_equal
 
 from src.normalize import normalize_df
+from src.normalize.basic import clean_text
 
 
 @pytest.mark.parametrize("raw, expected", [
@@ -20,8 +21,8 @@ from src.normalize import normalize_df
 def test_text_cases(raw, expected):
     df = pl.DataFrame({"business_name": [raw], "business_address": [raw]})
     result = normalize_df(df)
-    assert result["name_norm"][0] == expected
-    assert result["addr_norm"][0] == expected
+    assert df.select(clean_text(pl.col("business_name"))).item() == expected
+    assert df.select(clean_text(pl.col("business_address"))).item() == expected
     assert result["name_raw"][0] == raw
     assert result["address_raw"][0] == raw
 

@@ -84,6 +84,19 @@ India is harder than the US in this sample: mean cleaned-name token Jaccard is 0
 
 ## Normalization implications
 
+### Phase 4 implementation checkpoint
+
+Whole-token name and address abbreviation expansion passes 22 total tests.
+On the same 200 EDA true pairs, name equality increases from Phase 3's 37/200
+(18.5%) to 45/200 (22.5%). Mean name token Jaccard increases from 0.582387
+to 0.605720. Address equality remains 13/200 (6.5%). These are EDA diagnostics,
+not held-out performance estimates or top-k retrieval results. The current
+Phase 3 baseline retains Unicode marks, unlike the earlier EDA helper, explaining
+the small difference in baseline Jaccard from the initial EDA report.
+Rules apply to all country labels and never replace substrings inside tokens.
+The planned address `st` mapping is ambiguous with Saint; original text remains
+available. No legal-suffix removal, address parsing, or transliteration is included.
+
 ### Phase 3 implementation checkpoint
 
 The importable `src.normalize.normalize_df` basic cleaner passed 15 tests.
