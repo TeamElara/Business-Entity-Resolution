@@ -201,6 +201,26 @@ in `docs/phase11_france.md`. France has no supplied match labels, so these
 checks do not establish a France match score; postcode coverage remains very
 low and cannot be a required blocking key.
 
+## Phase 12 US-to-India generalization diagnostic
+
+`python -m src.normalize.evaluate_generalization` fits Arihant's baseline-v0
+matcher on 40,000 US **non-validation** S1 records, then measures US and India
+held-out validation with each full same-country S2/S3 pool. It also tests
+whether using our Devanagari `name_latin` in name comparisons helps the
+otherwise unchanged US model. `--fallback-only --skip-india-baseline
+--report-name metrics_fallback.json` separately measures the built-in
+romanizer without an India-learned map. Use a new `--out-dir` for different
+sample or pool settings because the US feature/model files are cached.
+
+With thresholds chosen only on US validation, macro F0.5 was 0.9177 on US
+and 0.7907 on India. India rose to 0.8086 with the built-in fallback and
+0.8376 with the Phase 10 Hindi map. **The map was learned from India
+non-validation matches**; only the built-in fallback is a no-India-training
+comparison. No India validation labels were used to fit or tune the matcher.
+See `docs/phase12_generalization.md` for exact denominators, retrieval
+recalls/oracle ceilings, limitations, and the handoff to matching/blocking
+owners. This diagnostic has not replaced the team's submitted model.
+
 ## Team ownership
 
 - `src/normalize/`: Mahatva
