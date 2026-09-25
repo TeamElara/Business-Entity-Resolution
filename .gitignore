@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Challenge data and generated artifacts are large and must not be committed.
+data/
+output/
+*.parquet
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

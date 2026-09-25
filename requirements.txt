@@ -1,0 +1,6 @@
+numpy==2.5.3
+polars==1.44.2
+pyarrow==25.0.1
+rapidfuzz==3.14.6
+pytest==9.1.1
+
