@@ -39,6 +39,24 @@ maintained in `docs/eda_notes.md`; the raw local inspection files are written un
 
 ## Ownership
 
+## Phase 3 basic normalization
+
+```python
+from src.normalize import normalize_df
+cleaned = normalize_df(df)
+```
+
+Adds `name_raw`, `address_raw`, `name_norm`, and `addr_norm`, preserving input
+columns and row order. Raw fields retain original nulls; cleaned missing values
+become empty strings. Cleaning applies NFKC, lowercase, ampersand expansion,
+punctuation/symbol separation, and whitespace collapse. Unicode combining marks
+are retained for Indic scripts. Abbreviations, legal forms, address parsing,
+transliteration and the final Parquet CLI are subsequent phases.
+
+Run checks with `.\.venv\Scripts\python.exe -m pytest -q`.
+
+## Team ownership
+
 - `src/normalize/`: Mahatva
 - `src/blocking/`: Ojaswi
 - `src/matching/` and `src/common/`: Arihant

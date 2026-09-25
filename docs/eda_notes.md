@@ -84,6 +84,17 @@ India is harder than the US in this sample: mean cleaned-name token Jaccard is 0
 
 ## Normalization implications
 
+### Phase 3 implementation checkpoint
+
+The importable `src.normalize.normalize_df` basic cleaner passed 15 tests.
+On the saved 4,500-row EDA sample it changed 4,256 names and 4,393 addresses.
+On the 200 sampled true pairs, exact raw name equality was 5/200 (2.5%),
+case-insensitive equality was 16/200 (8.0%), and Phase 3 normalized equality
+was 37/200 (18.5%). Normalized address equality was 13/200 (6.5%). These are
+descriptive EDA diagnostics, not held-out validation or candidate-ranking scores.
+Raw strings and nulls are preserved; normalized nulls become empty strings.
+Combining marks are retained to preserve Indic letters and vowel signs.
+
 1. Preserve raw text alongside every normalized value so that later feature work can compare both.
 2. Apply Unicode NFKC, lowercase, safe boundary-aware abbreviation expansion, punctuation-to-space, and
    whitespace collapse. Never perform substring abbreviation replacement.
@@ -96,4 +107,3 @@ India is harder than the US in this sample: mean cleaned-name token Jaccard is 0
    but normalization logic must still have generic fallbacks for unseen labels.
 7. Evaluate normalization not only by equality/Jaccard but by true-match top-5 and top-10 rank, because the
    final blocker is expected to retain only about 8-15 candidates per S1.
-
