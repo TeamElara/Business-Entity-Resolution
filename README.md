@@ -85,28 +85,37 @@ This inspects 300 rows per split/source/country group and 200 true matched pairs
 maintained in `docs/eda_notes.md`; the raw local inspection files are written under the gitignored
 `data/eda/` directory.
 
-## Phase 3 and 4 normalization
+## Phases 3-5 normalization
 
 ```python
 from src.normalize import normalize_df
 cleaned = normalize_df(df)
 ```
 
-Adds `name_raw`, `address_raw`, `name_norm`, and `addr_norm`, preserving input
+Adds `name_raw`, `address_raw`, `name_norm`, `name_core`, `legal_suffix`, and `addr_norm`, preserving input
 columns and row order. Raw fields retain original nulls; cleaned missing values
 become empty strings. Cleaning applies NFKC, lowercase, ampersand expansion,
 punctuation/symbol separation, and whitespace collapse. Unicode combining marks
-are retained for Indic scripts. Legal forms, address parsing,
-transliteration and the final Parquet CLI are subsequent phases.
+are retained for Indic scripts. Address parsing, transliteration and the final
+Parquet CLI are subsequent phases.
 
 Run checks with `.\.venv\Scripts\python.exe -m pytest -q`.
 
 Phase 4 expands complete cleaned tokens only. Names: `pvt`, `ltd`, `corp`,
 `inc`. Addresses: `rd`, `st`, `ave`, `blvd`, `ln`, `hwy`, `bldg`, `flr`, `apt`.
 The maps are field-specific and apply to all countries, including unknown labels.
-Ambiguous forms such as `co`, `in`, `sa`, and `no` remain unchanged. `st` uses
-the planned street convention, which can misinterpret Saint; raw text is retained.
-French-specific rules and legal-suffix removal are not implemented yet.
+Ambiguous forms such as `co`, `in`, `sa`, and `no` remain unchanged as token
+abbreviations. Dotted legal acronyms such as `L.L.C.` and `S.A.R.L.` become
+`llc` and `sarl`. `st` uses the planned street convention, which can
+misinterpret Saint; raw text is retained.
+
+Phase 5 removes recognized *trailing* legal forms into `name_core` and records
+their canonical value in `legal_suffix`. This covers India, US and French forms
+with a generic fallback for unknown country labels. A name with no legal form
+gets `legal_suffix = null`; a name made solely of a suffix retains its full
+core. The full `name_norm` remains available because stripping suffixes can
+make distinct businesses share one core name. French accent and address rules
+remain in Phase 11.
 
 ## Team ownership
 

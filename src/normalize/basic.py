@@ -2,7 +2,13 @@
 
 import polars as pl
 
-from .abbreviations import ADDRESS_ABBREVIATIONS, NAME_ABBREVIATIONS, expand_tokens
+from .abbreviations import (
+    ADDRESS_ABBREVIATIONS,
+    NAME_ABBREVIATIONS,
+    expand_tokens,
+    normalize_dotted_legal_forms,
+)
+from .legal import legal_suffix_and_core
 
 
 def clean_text(expr: pl.Expr) -> pl.Expr:
@@ -26,7 +32,7 @@ def clean_text(expr: pl.Expr) -> pl.Expr:
 def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
     """Preserve inputs and add raw/cleaned columns for names and addresses.
 
-    Raw columns preserve original strings, including nulls. This Phase 4
+    Raw columns preserve original strings, including nulls. This Phase 5
     implementation does not yet produce the full final normalization contract.
     Repeated calls recompute from original business columns, so are idempotent.
     """
@@ -34,9 +40,14 @@ def normalize_df(df: pl.DataFrame) -> pl.DataFrame:
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(sorted(missing))}")
-    return df.with_columns(
+    name_norm = normalize_dotted_legal_forms(
+        expand_tokens(clean_text(pl.col("business_name")), NAME_ABBREVIATIONS)
+    )
+    base = df.with_columns(
         pl.col("business_name").alias("name_raw"),
         pl.col("business_address").alias("address_raw"),
-        expand_tokens(clean_text(pl.col("business_name")), NAME_ABBREVIATIONS).alias("name_norm"),
+        name_norm.alias("name_norm"),
         expand_tokens(clean_text(pl.col("business_address")), ADDRESS_ABBREVIATIONS).alias("addr_norm"),
     )
+    name_core, legal_suffix = legal_suffix_and_core(pl.col("name_norm"))
+    return base.with_columns(name_core.alias("name_core"), legal_suffix.alias("legal_suffix"))
