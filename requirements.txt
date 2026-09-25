@@ -8,10 +8,12 @@ packaging==26.3
 pluggy==1.6.0
 polars==1.44.2
 polars-runtime-32==1.44.2
+psutil==7.2.2
 pyarrow==25.0.1
 Pygments==2.21.0
 pytest==9.1.1
 RapidFuzz==3.14.6
 scikit-learn==1.9.1
 scipy==1.17.1
+sparse-dot-topn==1.2.0
 threadpoolctl==3.7.0
