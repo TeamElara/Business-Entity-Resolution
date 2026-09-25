@@ -85,19 +85,19 @@ This inspects 300 rows per split/source/country group and 200 true matched pairs
 maintained in `docs/eda_notes.md`; the raw local inspection files are written under the gitignored
 `data/eda/` directory.
 
-## Phases 3-5 normalization
+## Phases 3-8 normalization
 
 ```python
 from src.normalize import normalize_df
 cleaned = normalize_df(df)
 ```
 
-Adds `name_raw`, `address_raw`, `name_norm`, `name_core`, `legal_suffix`, and `addr_norm`, preserving input
-columns and row order. Raw fields retain original nulls; cleaned missing values
+Adds the contract columns `name_raw`, `address_raw`, `name_norm`, `name_core`,
+`legal_suffix`, `name_latin`, `addr_norm`, `postcode`, `city`, `house_no`, and
+`script`, preserving input columns and row order. Raw fields retain original nulls; cleaned missing values
 become empty strings. Cleaning applies NFKC, lowercase, ampersand expansion,
 punctuation/symbol separation, and whitespace collapse. Unicode combining marks
-are retained for Indic scripts. Address parsing, transliteration and the final
-Parquet CLI are subsequent phases.
+are retained for Indic scripts.
 
 Run checks with `.\.venv\Scripts\python.exe -m pytest -q`.
 
@@ -108,6 +108,29 @@ Ambiguous forms such as `co`, `in`, `sa`, and `no` remain unchanged as token
 abbreviations. Dotted legal acronyms such as `L.L.C.` and `S.A.R.L.` become
 `llc` and `sarl`. `st` uses the planned street convention, which can
 misinterpret Saint; raw text is retained.
+
+Phase 6 uses conservative country-aware address parsing. Five-digit street or
+floor numbers are *not* blindly treated as ZIP/postal codes. The source data
+rarely includes explicit postcodes, so null is preferable to an unreliable
+blocking key. `city` and `house_no` are best-effort fields; inspect
+`docs/normalization_report.md` for fill rates and known limitations.
+
+Phase 7 labels names `latin`, `devanagari`, or `other`. `name_latin` is currently
+accent-stripped `name_core` for Latin names and empty for non-Latin names;
+cross-script transliteration is planned for Phase 10, and an empty string must
+not be interpreted as a comparable Latin name.
+
+Phase 8 produces all six files in one bounded-memory command:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.normalize.run --split all
+```
+
+Use `--split train` or `--split test` for only one split, and `--batch-size N`
+to adjust memory use (default 100,000). The runner writes each source atomically
+to `data/norm/{split}_s{1,2,3}.parquet`, plus a JSON run/fill-rate report in the
+same directory. Every Parquet column is a nullable string. Generated files are
+excluded from Git; teammates run the command against their own local dataset.
 
 Phase 5 removes recognized *trailing* legal forms into `name_core` and records
 their canonical value in `legal_suffix`. This covers India, US and French forms

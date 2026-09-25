@@ -1,5 +1,8 @@
 # Normalization EDA Notes
 
+For the full Phase 6–8 address fill rates and Parquet run audit, see
+`docs/normalization_report.md`.
+
 Generated on 25 Sep 2026 from the provided challenge inputs only. No external data or lookup service was
 used.
 
