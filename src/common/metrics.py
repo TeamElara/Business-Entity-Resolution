@@ -62,6 +62,26 @@ def macro_f05(pred, truth, return_per_entity: bool = False):
     return (score, scores) if return_per_entity else score
 
 
+def macro_f05_fast(pred: pl.DataFrame, truth) -> float:
+    """Same value as macro_f05, vectorised for (s1_id, cand_id) pair frames (threshold grids)."""
+    t = _as_truth_df(truth)
+    p = pred.select("s1_id", "cand_id").drop_nulls().unique().join(t.select("s1_id"), on="s1_id", how="semi")
+    hits = p.join(truth_pairs(t), on=["s1_id", "cand_id"], how="semi")
+    per = (
+        t.select("s1_id", pl.col("matched_ids").list.len().alias("n_true"))
+        .join(p.group_by("s1_id").len("n_pred"), on="s1_id", how="left")
+        .join(hits.group_by("s1_id").len("tp"), on="s1_id", how="left")
+        .with_columns(pl.col("n_pred", "tp").fill_null(0))
+    )
+    prec, rec = pl.col("tp") / pl.col("n_pred"), pl.col("tp") / pl.col("n_true")
+    f = (
+        pl.when(pl.col("n_true") == 0).then((pl.col("n_pred") == 0).cast(pl.Float64))
+        .when(pl.col("tp") == 0).then(0.0)
+        .otherwise(1.25 * prec * rec / (0.25 * prec + rec))
+    )
+    return per.select(f.mean()).item()
+
+
 # ---------------------------------------------------------------- blocking
 
 def _oracle_expr(tp: str = "tp", n_true: str = "n_true") -> pl.Expr:

@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 
 from .io import read_tsv
-from .metrics import blocking_report, f05_entity, macro_f05, to_set_dict, tradeoff_table
+from .metrics import blocking_report, f05_entity, macro_f05, macro_f05_fast, to_set_dict, tradeoff_table
 from .split import add_is_val, is_val
 from .writer import write_outputs
 
@@ -48,6 +48,10 @@ def main():
     assert close(macro_f05(truth, truth), 1.0)
     assert close(macro_f05({}, truth), 0.25)  # only the singleton scores
     assert close(macro_f05({"S1-A": {"S2-1", "S2-9"}}, truth), (f05_entity({"S2-1", "S2-9"}, {"S2-1", "S3-1"}) + 1) / 4)
+    preds = pl.DataFrame({"s1_id": ["S1-A", "S1-A", "S1-B", "S1-C", "S1-D", "S1-Z"],
+                          "cand_id": ["S2-1", "S2-9", "S2-2", "S3-9", "S3-3", "S2-5"]})
+    assert close(macro_f05_fast(preds, truth), macro_f05(preds, truth))
+    assert close(macro_f05_fast(preds.head(0), truth), 0.25)
 
     rows = [  # s1, cand, score, rank
         ("S1-A", "S2-1", 0.95, 1), ("S1-A", "S2-8", 0.90, 2), ("S1-A", "S3-1", 0.60, 3),
