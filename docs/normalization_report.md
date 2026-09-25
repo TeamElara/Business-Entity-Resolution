@@ -2,9 +2,10 @@
 
 Run on 25 Sep 2026 with `python -m src.normalize.run --split all` against the
 provided dataset. Six Parquet files contain **24,229,173 rows** in total. The
-sum of per-source processing times was **120.9 seconds** on this machine; the
-observed Python process peak working set was approximately **1.42 GB**. This
-is below the 16 GB RAM target. The generated JSON counts are at
+sum of per-source processing times was **120.9 seconds** on this machine. A
+spot check during the run showed a Python process peak working set of about
+**1.42 GB**; this is not a full-run peak measurement, but is comfortably below
+the 16 GB RAM target. The generated JSON counts are at
 `data/norm/normalization_report.json` (gitignored, local only).
 
 ## Address-field coverage
