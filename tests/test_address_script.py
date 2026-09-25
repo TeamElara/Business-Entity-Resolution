@@ -61,3 +61,6 @@ def test_script_and_interim_latin():
     other = _one("Chennai", "India", "தமிழ் கடை")
     assert other["script"] == "other"
     assert other["name_latin"] == ""
+    missing = _one(None, "India", None)
+    assert missing["script"] == "latin"
+    assert missing["name_latin"] == ""
