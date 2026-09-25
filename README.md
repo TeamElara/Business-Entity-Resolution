@@ -50,6 +50,10 @@ truth = add_is_val(load_ground_truth())                # s1_id, matched_ids (lis
 val = truth.filter("is_val")
 blocking_report(cand_df, val)                          # cand_df: s1_id, cand_id, sources, block_score, block_rank
 tradeoff_table(cand_df, val)                           # avg cands/S1 vs oracle ceiling vs recall
+# one country (8 GB machines): India val S1 vs the full India S2/S3 pool; the reduction ratio
+# then uses the India pool automatically
+s1_in = load_source("train", 1, country="India", columns=["entity_id", "country"]).rename({"entity_id": "s1_id"})
+blocking_report(cand_df, val.join(s1_in, on="s1_id", how="semi"), s1_country=s1_in)
 macro_f05(pred, val)                                   # pred: dict or (s1_id, cand_id) frame
 write_outputs(matches, cands, test_s1_ids, "output")   # both TSVs, checks matches ⊆ candidates
 ```

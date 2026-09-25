@@ -11,7 +11,7 @@ Conventions:
 """
 import polars as pl
 
-from .io import count_rows, load_source, truth_pairs
+from .io import load_source, scan_source, truth_pairs
 
 
 def f05_entity(pred: set, truth: set) -> float:
@@ -90,14 +90,28 @@ def _restrict(cand_df: pl.DataFrame, t: pl.DataFrame) -> pl.DataFrame:
     return cand_df.join(t.select("s1_id"), on="s1_id", how="semi")
 
 
+def _pool_size(split: str, countries) -> int:
+    """Number of S2+S3 records of `split`, restricted to `countries` when given."""
+    n = 0
+    for src in (2, 3):
+        lf = scan_source(split, src, columns=["country"])
+        if countries is not None:
+            lf = lf.filter(pl.col("country").is_in(list(countries)))
+        n += lf.select(pl.len()).collect().item()
+    return n
+
+
 def blocking_report(cand_df: pl.DataFrame, truth, s1_country="train",
-                    pool_size=None, name: str = "", verbose: bool = True) -> dict:
+                    pool_size=None, split: str = "train", name: str = "",
+                    verbose: bool = True) -> dict:
     """Print and return blocking quality for cand_df against truth.
 
     s1_country: DataFrame (s1_id, country), or "train"/"test" to load S1
         countries from that split, or None to skip the per-country breakdown.
-    pool_size: number of S2+S3 records used for the reduction ratio; defaults
-        to the row count of train S2 + S3.
+    pool_size: number of S2+S3 records used for the reduction ratio. Default:
+        S2+S3 rows of `split` in the countries of the evaluated S1 (so an
+        India-only run is compared with the India pool), or all rows when
+        s1_country is None.
     """
     t = _as_truth_df(truth)
     tp_pairs = truth_pairs(t)
@@ -107,12 +121,22 @@ def blocking_report(cand_df: pl.DataFrame, truth, s1_country="train",
     c = c.unique()
     per = _per_s1(c, t, tp_pairs)
 
+    if isinstance(s1_country, str):
+        s1_country = load_source(s1_country, 1, columns=["entity_id", "country"]) \
+            .rename({"entity_id": "s1_id"})
+    if s1_country is not None:
+        per = per.join(s1_country.select("s1_id", "country"), on="s1_id", how="left") \
+            .with_columns(pl.col("country").fill_null("<missing>"))
+
     n_s1 = per.height
     total_pairs = int(per["n_cand"].sum())
     n_true = int(per["n_true"].sum())
     tp = int(per["tp"].sum())
+    pool_countries = None
     if pool_size is None:
-        pool_size = count_rows("train", 2) + count_rows("train", 3)
+        if s1_country is not None:
+            pool_countries = sorted(per["country"].unique().to_list())
+        pool_size = _pool_size(split, pool_countries)
     nc = per["n_cand"]
     out = {
         "name": name,
@@ -128,6 +152,8 @@ def blocking_report(cand_df: pl.DataFrame, truth, s1_country="train",
         "reduction_ratio": 1 - total_pairs / (n_s1 * pool_size) if pool_size else float("nan"),
         "dup_pairs": n_dup,
         "ignored_pairs": n_in - n_dup - c.height,
+        "pool_size": pool_size,
+        "pool_countries": pool_countries,
     }
 
     # recall by source prefix of the true id
@@ -151,13 +177,8 @@ def blocking_report(cand_df: pl.DataFrame, truth, s1_country="train",
 
     by_country = None
     if s1_country is not None:
-        if isinstance(s1_country, str):
-            s1_country = load_source(s1_country, 1, columns=["entity_id", "country"]) \
-                .rename({"entity_id": "s1_id"})
         by_country = (
-            per.join(s1_country, on="s1_id", how="left")
-            .with_columns(pl.col("country").fill_null("<missing>"))
-            .group_by("country")
+            per.group_by("country")
             .agg(
                 pl.len().alias("n_s1"),
                 pl.col("n_cand").mean().alias("mean_cands"),
@@ -167,6 +188,19 @@ def blocking_report(cand_df: pl.DataFrame, truth, s1_country="train",
             .sort("n_s1", descending=True)
         )
     out["by_country"] = by_country
+
+    # by the S1's number of true matches (7+ grouped)
+    out["by_n_true"] = (
+        per.with_columns(pl.col("n_true").clip(upper_bound=7).alias("n_true_grp"))
+        .group_by("n_true_grp")
+        .agg(
+            pl.len().alias("n_s1"),
+            pl.col("n_cand").mean().alias("mean_cands"),
+            (pl.col("tp").sum() / pl.col("n_true").sum()).alias("pair_recall"),
+            pl.col("oracle").mean().alias("oracle"),
+        )
+        .sort("n_true_grp")
+    )
     out["per_s1"] = per
 
     if verbose:
@@ -182,7 +216,8 @@ def _print_report(o: dict) -> None:
           f"| p95 {o['p95_cands']} | max {o['max_cands']} | S1 with 0 cands {o['s1_zero_cands']:,}")
     print(f"  pair recall         {o['pair_recall']:.4f}")
     print(f"  oracle ceiling      {o['oracle_ceiling']:.4f}")
-    print(f"  reduction ratio     {o['reduction_ratio']:.8f}")
+    pool_note = "all countries" if o["pool_countries"] is None else "/".join(o["pool_countries"])
+    print(f"  reduction ratio     {o['reduction_ratio']:.8f}  (pool {o['pool_size']:,} S2+S3, {pool_note})")
     if o["dup_pairs"] or o["ignored_pairs"]:
         print(f"  (dropped {o['dup_pairs']:,} duplicate pairs, "
               f"ignored {o['ignored_pairs']:,} pairs for S1 outside truth)")
@@ -195,6 +230,11 @@ def _print_report(o: dict) -> None:
         for r in o["by_country"].iter_rows(named=True):
             print(f"    {r['country']:<10} n_s1 {r['n_s1']:>9,}  cands/S1 {r['mean_cands']:6.2f}  "
                   f"pair recall {r['pair_recall']:.4f}  oracle {r['oracle']:.4f}")
+    print("  by number of true matches:")
+    for r in o["by_n_true"].iter_rows(named=True):
+        label = f"{r['n_true_grp']}+" if r["n_true_grp"] == 7 else str(r["n_true_grp"])
+        print(f"    {label:<3} n_s1 {r['n_s1']:>9,}  cands/S1 {r['mean_cands']:6.2f}  "
+              f"pair recall {r['pair_recall']:.4f}  oracle {r['oracle']:.4f}")
 
 
 DEFAULT_CUTOFFS = (

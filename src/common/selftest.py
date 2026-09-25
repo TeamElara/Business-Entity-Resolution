@@ -68,6 +68,8 @@ def main():
     assert rep["total_pairs"] == 7 and rep["ignored_pairs"] == 1 and rep["max_cands"] == 3
     assert close(rep["pair_recall"], 4 / 6)
     assert close(rep["reduction_ratio"], 1 - 7 / (4 * 100))
+    bn = {r["n_true_grp"]: r for r in rep["by_n_true"].iter_rows(named=True)}
+    assert sorted(bn) == [0, 1, 2, 3] and close(bn[3]["pair_recall"], 1 / 3) and close(bn[2]["oracle"], 1.0)
     print(f"oracle vectorised == f05 loop: {oracle_loop:.4f}")
 
     tab = tradeoff_table(cand, truth, cutoffs=[("all", None), ("topk", 1), ("topk", 2), ("gap", 0.1), ("topk_gap", (2, 0.1))])
