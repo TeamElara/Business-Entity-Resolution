@@ -140,6 +140,23 @@ core. The full `name_norm` remains available because stripping suffixes can
 make distinct businesses share one core name. French accent and address rules
 remain in Phase 11.
 
+## Phase 9 held-out normalization evaluation
+
+After generating the train Parquet files, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m src.normalize.evaluate
+```
+
+This evaluates **all** held-out validation S1 records against the full
+same-country S2/S3 pool. It reports true-pair equality/Jaccard and retrieves
+raw name+address TF-IDF top-50 candidates, then re-ranks the same candidates
+by raw versus normalized name similarity. The local JSON output is
+`data/eda/phase09_metrics.json`; the checked summary and limitations are in
+`docs/phase09_validation.md`. Use `--max-queries-per-country N` only for a
+deterministic diagnostic sample, not for headline metrics. This is not the
+final challenge score or a test-set result.
+
 ## Team ownership
 
 - `src/normalize/`: Mahatva
