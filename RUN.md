@@ -1,12 +1,14 @@
-# Reproduce the v3 candidate run and assemble the submission (draft)
+# Reproduce the CP2 candidate run and assemble the submission (draft)
 
-This is the raw-data-to-output guide for the **v3 + orphan/reverse features**
-candidate as of 26 September 2026. `extra` is a reproducible local model tag;
-replace it with the exact selected tag at the final freeze. Public leaderboard
-score and final pick are pending. Do not package until the exact final test
-files pass the validator and match the leaderboard upload.
-The reported validation 0.9739 uses `t=0.75`, `t1=0.55`, and the same
-one-record-to-one-S1 decision rule as test.
+This is the raw-data-to-output guide for the **CP2 candidate** as of 26
+September 2026: v3 + orphan/reverse features + Ojaswi's S1 no-match score
+(`p_zero`) + legal-form agreement. `cp2` is a provisional model tag; replace
+it with the exact selected tag at the 27 September 4 PM freeze. CP2's reported
+validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). Its first public
+upload is planned for 9 AM; no public CP2 score or final pick is claimed here.
+The provisional test decision is `t=0.85`, `t1=0.5`, with each S2/S3 record
+assigned to at most one S1. Do not package until the exact final test files
+pass the validator and match the selected leaderboard upload.
 
 ## 1. Inputs and environment
 
@@ -27,10 +29,13 @@ $env:DATA_RAW = "C:\path\to\student_resource\dataset"
 .\.venv\Scripts\python.exe -m src.blocking.reverse --split train
 .\.venv\Scripts\python.exe -m src.blocking.reverse --split test
 .\.venv\Scripts\python.exe -m src.blocking.orphan
+.\.venv\Scripts\python.exe -m src.blocking.orphan --group-by-s1
+.\.venv\Scripts\python.exe -m src.blocking.s1_zero
 .\.venv\Scripts\python.exe -m src.matching.v3 features
 .\.venv\Scripts\python.exe -m src.matching.v3 prune
-.\.venv\Scripts\python.exe -m src.matching.v3 train --tag extra --final-k 6 --p-min 0.003 --extra
-.\.venv\Scripts\python.exe -m src.matching.v3 test --tag extra --t 0.75 --t1 0.55
+.\.venv\Scripts\python.exe -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
+.\.venv\Scripts\python.exe -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
+.\.venv\Scripts\python.exe -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
 .\.venv\Scripts\python.exe utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$env:DATA_RAW\test" --check-ids
 ```
 
@@ -39,13 +44,17 @@ On macOS/Linux, use `python3.11 -m venv .venv`, `.venv/bin/python`, and
 `libomp` on macOS. Reverse search, feature construction and the full test pass
 are long-running; allow several hours and check RAM/disk before starting.
 
-The `--extra` training option reads `data/cand/rev_train.parquet` and
-`data/cand/orphan_train.parquet`. Test scoring reads their `test` counterparts.
-If either is absent, v3 fills that feature with nulls, so a run can complete
-but will **not** reproduce the reported 0.9739 validation candidate. Check
-that all four files exist before training. The final matcher scores only the
-pruned top-six, probability ≥ 0.003 candidate set; test decisions then enforce
-one record assigned to at most one S1.
+`--extra` reads `data/cand/rev_{train,test}.parquet` and
+`orphan_{train,test}.parquet`. `s1_zero.py` additionally needs
+`orphan_train_grouped.parquet`, produced by the grouped orphan command, and
+the reverse files. It writes `s1_zero_{train,test}.parquet` with `p_zero`.
+`--cp2` then reads those two S1 files and derives legal-form agreement from
+the normalized records. Check that all these artifacts exist before training;
+missing extra features may be filled with nulls rather than causing a hard
+failure. The `test` command first builds the full test candidate cache; the
+explicit `rescore` command uses that cache to produce the provisional
+`t=0.85`, `t1=0.5` files. The final matcher scores only the pruned top-six,
+probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
 Earlier fresh-clone dry run on Windows / Python 3.13 (`main` at `dc87f81`, 26 Sep):
 the pinned dependency install succeeded; `src.common.selftest` passed; all
@@ -69,6 +78,7 @@ this fresh clone. Model training/test is owned by Arihant; copy only the
 test on a clean machine, run `python -m src.matching.v3 --help`,
 `python -m src.blocking.reverse --help`, and
 `python -m src.blocking.orphan --help` after installation and self-test.
+`src.blocking.s1_zero` has no help mode; running it starts the full build.
 
 ## 2. Validate the final files
 

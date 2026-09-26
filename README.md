@@ -259,15 +259,20 @@ evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
 The latest reported public leaderboard score is **0.933** from upload #5,
 v3 with orphan and reverse-search features at `t=0.85` (up from v2's 0.924).
-This is a provisional public result; the final pick is pending. V3 adds all six
+This is a provisional public result; CP2's first upload and the final pick are
+pending. V3 adds all six
 of Ojaswi's stage-1 blocks to Arihant's two blocks. A LightGBM pruner keeps
 at most six candidates per S1 with probability at least 0.003 (reported
 validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
-per-S1, orphan-probability and reverse-search features. Reported v3 validation
-macro F0.5 is **0.9739** (India 0.9709, US 0.9759), versus v3 base 0.9709
-and v3 + orphan 0.9731; v2 scored 0.9689. The 0.9739 validation score uses the
-same `t=0.75`, `t1=0.55`, and one-record-to-one-S1 decision rule as test.
-These are **validation**, not public/private leaderboard scores. With pinned
+per-S1, orphan-probability and reverse-search features. The CP2 candidate
+also uses Ojaswi's S1 no-match probability (`p_zero`; grouped OOF AUC 0.9849,
+India 0.9781, US 0.9885) and legal-form agreement. The `p_zero` model is
+documented in `docs/orphan_model.md`.
+Reported validation macro F0.5 rises from v3 base 0.9709 to + orphan 0.9731,
++ reverse search **0.9739** (India 0.9709, US 0.9759), then CP2 **0.9766**
+(India 0.9740, US 0.9782). CP2's planned first upload uses `t=0.85`,
+`t1=0.5` and the one-record-to-one-S1 decision rule. These are **validation**
+figures, not CP2 public/private leaderboard scores. With pinned
 dependencies installed and `data/raw` set up as above,
 the draft v3 raw-data-to-output commands are:
 
@@ -276,18 +281,21 @@ python -m src.normalize.run --split all
 python -m src.blocking.reverse --split train
 python -m src.blocking.reverse --split test
 python -m src.blocking.orphan
+python -m src.blocking.orphan --group-by-s1
+python -m src.blocking.s1_zero
 python -m src.matching.v3 features
 python -m src.matching.v3 prune
-python -m src.matching.v3 train --tag extra --final-k 6 --p-min 0.003 --extra
-python -m src.matching.v3 test --tag extra --t 0.75 --t1 0.55
+python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
+python -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
+python -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-`extra` is a reproducible local model tag; reconcile it with the exact final
+`cp2` is a provisional local model tag; reconcile it with the exact final
 tag after Arihant freezes the run. The pruned candidate list is written to
 `candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
-Test decisions assign each S2/S3 record to at most one S1, with
-`t=0.75` and `t1=0.55`.
+Test decisions assign each S2/S3 record to at most one S1, with provisional
+`t=0.85` and `t1=0.5`.
 `RUN.md` lists the clean-machine checks and required zip layout. The final
 test outputs, validator result, and leaderboard score must all come from the
 same run. Historical v2 and v1 measurements remain in `docs/matching_v2.md`

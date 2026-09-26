@@ -2,11 +2,11 @@
 
 **Team:** Team Elara (Mahatva Goel, Arihant, Ojaswi)
 
-**Status (26 September 2026):** v3 with orphan and reverse-search features is the current validation candidate. Upload #5 scored 0.933 on the public leaderboard at `t=0.85`, but the final pick, final code tag, and exact final output files are pending. Reconcile this draft to the exact selected files before packaging.
+**Status (26 September 2026):** CP2 (v3 + orphan/reverse search + S1 no-match probability + legal-form agreement) is the current validation candidate. Its first upload is planned for 27 September at 9 AM. The previous v3 upload #5 scored 0.933 publicly at `t=0.85`; no CP2 leaderboard result or final pick is claimed yet. Reconcile this draft to the exact selected files before packaging.
 
 ## 1. Executive summary
 
-For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. The v3 candidate uses multilingual normalization, a wide eight-block internal retrieval union, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. The reported top-six validation macro F0.5 is **0.9739** with 5.05 candidates/S1 and a 0.9938 oracle ceiling. These are **validation**, not public/private leaderboard results. Upload #5 scored **0.933** publicly for v3 at `t=0.85`; the final pick remains pending.
+For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. The CP2 candidate uses multilingual normalization, a wide eight-block internal retrieval union, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. Its reported top-six validation macro F0.5 is **0.9766** (India 0.9740, US 0.9782), up from 0.9739 for v3 + orphan/reverse search. The reported candidate-set mean is 5.05/S1, with a 0.9938 oracle ceiling. These are **validation**, not public/private leaderboard results. The preceding v3 upload #5 scored **0.933** publicly; CP2's public score and the final pick are pending.
 
 ## 2. Methodology
 
@@ -41,7 +41,7 @@ Ojaswi independently measured all **six of her own blocks** with the zero-width-
 
 Mahatva's normalizer preserves raw text, cleaned `name_core`, addresses, script, and Devanagari `name_latin` learned from **non-validation** Hindi/Latin pairs with a rule fallback. Ojaswi's text path folds Latin accents, normalizes domains/digit look-alikes, romanizes additional Indic scripts using non-validation token alignments plus a built-in fallback, and builds consonant skeletons. Neither token map uses validation labels.
 
-V3 retains the v2 training framework: non-validation fit sample A for two pruner folds, out-of-fold pruner candidates from A plus fit sample B for the final matcher. V2 used 398,201 S1s and 1.99 million candidate pairs; v3 training-set counts should be taken from the exact v3 run. The pair features cover name/address similarities and ranks, tolerant house/number comparison, block scores and ranks, block overlap, name rarity and token IDF. The final matcher adds per-S1 relative features and v3's `orphan_prob` plus reverse-search rank/gap signals. `orphan_prob` estimates whether a candidate S2/S3 record may be unmatched; reverse search ranks S1s from a candidate's perspective. The test decision uses **0.75** for qualifying pairs and **0.55** for the best-pair fallback, then assigns each S2/S3 record to at most one S1. There is no country one-hot feature.
+CP2 retains the v2 training framework: non-validation fit sample A for two pruner folds, out-of-fold pruner candidates from A plus fit sample B for the final matcher. V2 used 398,201 S1s and 1.99 million candidate pairs; CP2 training-set counts should be taken from its exact run. The pair features cover name/address similarities and ranks, tolerant house/number comparison, block scores and ranks, block overlap, name rarity and token IDF. The final matcher adds per-S1 relative features, `orphan_prob` and reverse-search rank/gap signals. `orphan_prob` estimates whether a candidate S2/S3 record may be unmatched; reverse search ranks S1s from a candidate's perspective. CP2 adds Ojaswi's S1 no-match probability (`p_zero`, S1-grouped out-of-fold AUC 0.9849; India 0.9781, US 0.9885) and legal-form agreement. The provisional test decision uses **0.85** for qualifying pairs and **0.5** for the best-pair fallback, then assigns each S2/S3 record to at most one S1. There is no country one-hot feature.
 
 The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0.8982**, but a comparable v3 cross-country retraining check has **not yet been reported**. The Indic maps use India non-validation matches, so a US-only model with those maps would not be a pure zero-shot preprocessing experiment. France has no supplied match labels; manual review is qualitative, not a France F0.5 estimate.
 
@@ -55,6 +55,7 @@ The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0
 | V3 base, top six | 0.9709 | pending | pending | pending |
 | V3 + orphan, top six | 0.9731 | pending | pending | pending |
 | **V3 + orphan/reverse, top six** | **0.9739 reported at t=0.75** | **0.9759 / 0.9709 reported** | **0.933 at t=0.85 (upload #5)** | **5.37 test** |
+| **CP2 (+ p_zero/legal form)** | **0.9766 reported** | **0.9782 / 0.9740 reported** | **pending 9 AM upload** | **pending** |
 
 Upload #5 passed `validate_submission.py --check-ids`; that check must be repeated on the **exact final files** after the final pick. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. The v3 validation and public scores are provisional team results; final-run artifacts still need reconciliation.
 
@@ -62,7 +63,7 @@ Real v1 validation error analysis (not v3): **8,618 false positives**, **37,745*
 
 ## 6. Conclusion
 
-The v3 candidate raises reported validation macro F0.5 to **0.9739**, compared with 0.9689 for v2, at **5.05 final candidates/S1** and a **0.9938 oracle ceiling**. This is promising but does not guarantee a better test or private-leaderboard result. Freeze the selected code and outputs, measure the exact test candidate statistics, verify `--check-ids`, and reconcile this document and final zip to that same run.
+The CP2 candidate raises reported validation macro F0.5 to **0.9766**, compared with 0.9739 for v3 + orphan/reverse and 0.9689 for v2, at **5.05 reported final candidates/S1** and a **0.9938 oracle ceiling**. This is promising but does not guarantee a better test or private-leaderboard result. Freeze the selected code and outputs, measure the exact test candidate statistics, verify `--check-ids`, and reconcile this document and final zip to that same run.
 
 ## Appendix A. Reproduction and final package
 
@@ -73,11 +74,14 @@ python -m src.normalize.run --split all
 python -m src.blocking.reverse --split train
 python -m src.blocking.reverse --split test
 python -m src.blocking.orphan
+python -m src.blocking.orphan --group-by-s1
+python -m src.blocking.s1_zero
 python -m src.matching.v3 features
 python -m src.matching.v3 prune
-python -m src.matching.v3 train --tag extra --final-k 6 --p-min 0.003 --extra
-python -m src.matching.v3 test --tag extra --t 0.75 --t1 0.55
+python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
+python -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
+python -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$DATA_RAW/test" --check-ids
 ```
 
-`extra` is a local tag, **not yet the frozen final tag**. Arihant confirmed that the reported 0.9739 validation score uses the same decision rules as test: `t=0.75`, `t1=0.55`, with one S2/S3 record assigned to at most one S1. The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` preserve prior measurements. If a later pipeline wins, **replace all affected commands and figures before packaging**.
+`cp2` is a local tag, **not yet the frozen final tag**. The `test` step builds the cache needed for the explicit `rescore` step; the provisional upload decision is `t=0.85`, `t1=0.5`, with one S2/S3 record assigned to at most one S1. The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` preserve prior measurements. If a later pipeline wins, **replace all affected commands and figures before packaging**.
