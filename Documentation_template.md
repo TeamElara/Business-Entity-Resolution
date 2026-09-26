@@ -2,11 +2,11 @@
 
 **Team:** Team Elara (Mahatva Goel, Arihant, Ojaswi)
 
-**Status (26 September 2026):** v3 with orphan and reverse-search features is the current validation candidate. Final code tag, test outputs, validator result, and v3 leaderboard score are pending. Reconcile this draft to the exact selected files before packaging.
+**Status (26 September 2026):** v3 with orphan and reverse-search features is the current validation candidate. Upload #5 scored 0.933 on the public leaderboard at `t=0.85`, but the final pick, final code tag, and exact final output files are pending. Reconcile this draft to the exact selected files before packaging.
 
 ## 1. Executive summary
 
-For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. The v3 candidate uses multilingual normalization, a wide eight-block internal retrieval union, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. The reported top-six validation macro F0.5 is **0.9739** with 5.05 candidates/S1 and a 0.9938 oracle ceiling. These are **validation**, not public/private leaderboard results. The latest team-reported public score is **0.924** from v2 (`t=0.85`); v3 upload and final pick are pending.
+For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. The v3 candidate uses multilingual normalization, a wide eight-block internal retrieval union, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. The reported top-six validation macro F0.5 is **0.9739** with 5.05 candidates/S1 and a 0.9938 oracle ceiling. These are **validation**, not public/private leaderboard results. Upload #5 scored **0.933** publicly for v3 at `t=0.85`; the final pick remains pending.
 
 ## 2. Methodology
 
@@ -35,7 +35,7 @@ Two pruners trained on separate halves of the fit sample produce averaged probab
 
 V2 top six cost 0.0014 validation F0.5 versus top eight but retained 13% fewer candidates. Those v2 country-wise and zero-candidate statistics must not be carried over to v3. The **test** total, mean/median/maximum, zero-candidate count, country coverage and reduction ratio must be measured from the exact selected v3 output file.
 
-Ojaswi independently measured all **six of her own blocks**: 48.3 stage-1 candidates/S1 (p95 59, max 70), pair recall 0.984, oracle 0.9951 on 220,907 full-validation S1s, with no S1 left without candidates. US: 46.5 candidates/S1, recall 0.990, oracle 0.997; India: 51.0, recall 0.976, oracle 0.992. S2 recall was 0.986 and S3 recall 0.983. This is a standalone retrieval measurement **before** the zero-width-joiner text fix used in the frozen v3 run; the post-fix rerun is pending. It is not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
+Ojaswi independently measured all **six of her own blocks** with the zero-width-joiner fix used in v3: 48.3 stage-1 candidates/S1 (p95 59, max 70), pair recall 0.9849, oracle 0.9953 on 220,907 full-validation S1s, with no S1 left without candidates. US: 46.5 candidates/S1, recall 0.990, oracle 0.997; India: 51.0, recall 0.9773, oracle 0.9929. S2 recall was 0.987 and S3 recall 0.984. This is a standalone retrieval measurement, not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
 
 ## 4. Matching model
 
@@ -54,9 +54,9 @@ The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0
 | V2, top six | 0.9689 | 0.9722 / 0.9640 | **0.924 reported** (`t=0.85`) | pending |
 | V3 base, top six | 0.9709 | pending | pending | pending |
 | V3 + orphan, top six | 0.9731 | pending | pending | pending |
-| **V3 + orphan/reverse, top six** | **0.9739 reported** | **0.9759 / 0.9709 reported** | **pending** | **pending** |
+| **V3 + orphan/reverse, top six** | **0.9739 reported at t=0.75** | **0.9759 / 0.9709 reported** | **0.933 at t=0.85 (upload #5)** | **5.37 test** |
 
-Upload #2 passed `validate_submission.py --check-ids` with no match outside the candidate list. That check must be repeated on the **exact v3 final files**. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. The reported v3 validation numbers and v2 public score came from team updates; final-run artifacts and a public v3 upload still need reconciliation.
+Upload #5 passed `validate_submission.py --check-ids`; that check must be repeated on the **exact final files** after the final pick. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. The v3 validation and public scores are provisional team results; final-run artifacts still need reconciliation.
 
 Real v1 validation error analysis (not v3): **8,618 false positives**, **37,745** true matches retrieved but rejected by the final model, **1,071** cut by the pruner, and **35,065** absent from stage 1. Frequent false positives are a similar name at a different address or another business at the same address; rejected true matches often have a blank address or a slightly different house number. V2's wider stage reduced missing true pairs to **11,844** before pruning. In a preliminary manual review of v1 France predictions for S1 #101–200, Mahatva marked 242 predicted pairs `ok` and 40 `wrong`, with 18 predicted pairs unresolved and one possible missed pair left unconfirmed. Of the 40 wrong predictions, 23 had a different distinctive name/location and 16 had a different house number despite overlapping names/streets. Arihant's separate review of #1–100 found 255 `ok`, 28 `wrong`, and 3 missed. These are manual diagnostics, not a labeled France F0.5 estimate; v3 error analysis remains pending. No private score is claimed.
 

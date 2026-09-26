@@ -237,12 +237,12 @@ analysis and all numbers: `docs/blocking.md`.
   `prepare(split, source, country, tmap)` builds every text column; `topk_block()` scores one block.
   Matching v3 imports all six; v2 used only `word`, `skel`, and `noaddr`.
 
-Separate all-six-Ojaswi-block validation (220,907 S1, full same-country
-pools): pair recall **0.984**, oracle F0.5 **0.9951** at 48.3 candidates/S1
-(US 0.990, India 0.976). These are Ojaswi's standalone stage-1 figures, **not**
-v3's larger union with Arihant's two matching blocks or its pruned final set.
-They were measured before the zero-width-joiner text fix included in v3;
-updated six-block figures are pending a full-validation rerun.
+Separate all-six-Ojaswi-block validation with the zero-width-joiner fix used
+by v3 (220,907 S1, full same-country pools): pair recall **0.9849**, oracle
+F0.5 **0.9953** at 48.3 candidates/S1 (US recall 0.990, India 0.9773).
+The prior measurement was 0.984 recall and 0.9951 oracle before that fix.
+These are Ojaswi's standalone stage-1 figures, **not** v3's larger union
+with Arihant's two matching blocks or its pruned final set.
 
 ```bash
 # stage-1 pairs + prepared text for val S1 (writes data/cand/stage1_train_val.parquet, prep_train_val.parquet)
@@ -257,8 +257,9 @@ evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
 ## V3 candidate pipeline and final package
 
-The latest reported public leaderboard score is **0.924** from v2 at
-`t=0.85`; the team's v3 upload and final pick are pending. V3 adds all six
+The latest reported public leaderboard score is **0.933** from upload #5,
+v3 with orphan and reverse-search features at `t=0.85` (up from v2's 0.924).
+This is a provisional public result; the final pick is pending. V3 adds all six
 of Ojaswi's stage-1 blocks to Arihant's two blocks. A LightGBM pruner keeps
 at most six candidates per S1 with probability at least 0.003 (reported
 validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
