@@ -230,18 +230,19 @@ analysis and all numbers: `docs/blocking.md`.
   leading zeros), Indic-script → Latin token map learned from non-validation training pairs
   (cached in `data/cand/script_token_map.json`, learned on first use) with a rule-based romanizer
   for all nine Indic Unicode blocks, consonant skeletons.
-- `stage1.py`: five TF-IDF blocks in `BLOCKS` (text column, pool filter, top-k, max_df):
+- `stage1.py`: six TF-IDF blocks in `BLOCKS` (text column, pool filter, top-k, max_df):
   `word` (name + address), `skel` (skeletons), `noaddr` (name vs pool records without address),
-  `namenum` (name + address numbers), `concat` (joined name, char 3-grams, vs domain-like names).
+  `namenum` (name + address numbers), `concat` (joined name, char 3-grams, vs domain-like names),
+  `namehouse` (name + whole house numbers such as `J-52/4`).
   `prepare(split, source, country, tmap)` builds every text column; `topk_block()` scores one block.
   The selected matching v2 pipeline imports only the first three (`word`,
-  `skel`, `noaddr`); `namenum` and `concat` are later experiments.
+  `skel`, `noaddr`); `namenum`, `concat`, and `namehouse` are later experiments.
 
-Separate all-five-block validation (220,907 S1, full same-country pools):
-pair recall **0.983**, oracle F0.5 **0.9945** at 46.4 candidates/S1
-(US 0.990, India 0.972). These are **not** the selected v2 pipeline's
-five-block-union or final-candidate figures; v2 uses two matching blocks plus
-the first three of Ojaswi's blocks (see `docs/matching_v2.md`).
+Separate all-six-Ojaswi-block validation (220,907 S1, full same-country
+pools): pair recall **0.984**, oracle F0.5 **0.9951** at 48.3 candidates/S1
+(US 0.990, India 0.976). These are **not** the selected matching v2
+pipeline's five-block-union or final-candidate figures; v2 uses two matching
+blocks plus the first three of Ojaswi's blocks (see `docs/matching_v2.md`).
 
 ```bash
 # stage-1 pairs + prepared text for val S1 (writes data/cand/stage1_train_val.parquet, prep_train_val.parquet)
@@ -279,7 +280,7 @@ On macOS/Linux, use `cp` instead of `Copy-Item`. The v2 cascade is wide
 retrieval (the two v1 blocks plus Ojaswi's `word`, `skel`, and `noaddr`
 blocks) → LightGBM pruner → final candidate list (`candidate_pairs.tsv`) →
 separate final LightGBM matcher, which scores exactly that list. Ojaswi's
-later `namenum` and `concat` blocks are **not** part of the measured v2
+later `namenum`, `concat`, and `namehouse` blocks are **not** part of the measured v2
 model. `docs/matching_v2.md` and `docs/blocking.md` give the validation
 numbers and distinctions; `Documentation_template.md` is the methodology
 draft. Measure the **exact final** test outputs and update that document

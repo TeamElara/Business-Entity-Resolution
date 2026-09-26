@@ -11,6 +11,9 @@ Blocks, all fitted on the S2+S3 pool of one country and queried with that countr
 - concat: the name with legal/filler words removed and spaces dropped ("nikolettamoorerhomes"),
           as character 3-grams, against only pool records whose name is one long token (domain-like
           names). 35% of the pairs the other four blocks miss are such names (val: +0.5 pts).
+- namehouse: name + whole house-number tokens taken from the raw address ("J-52/4" -> j52_4,
+          "70/1/1" -> 70_1_1). Small numbers alone are too frequent to count in TF-IDF; the full
+          house number is rare and distinctive (India val: +0.4 pts; few US addresses have them).
 
 Countries come from the S1 file, never from a fixed list. Outputs (gitignored):
 - data/cand/stage1_{split}.parquet: s1_id, cand_id, s_word, r_word, s_skel, r_skel, s_noaddr, r_noaddr
@@ -42,7 +45,20 @@ BLOCKS = {  # name: (text column, pool filter column or None, top-k, max_df)
     "noaddr": ("skel_name", "addr_empty", 10, 0.05),
     "namenum": ("namenum", None, 10, 0.05),
     "concat": ("concat3", "domainlike", 5, 0.05),
+    "namehouse": ("namehouse", None, 5, 0.05),
 }
+# house-number tokens in a raw address: "J-52/4", "70/1/1", "2-1-241/62", "B-3", "39/2475-A"
+HOUSE_RE = r"(?:\b[a-z]{1,3}\s?[-#.]?\s?)?\d+(?:\s?[/\-]\s?[a-z0-9]+)+|\b[a-z]{1,3}\s?-\s?\d+[a-z]?\b"
+
+
+def house_tokens(addr_raw: pl.Expr) -> pl.Expr:
+    """Whole house numbers of a raw address as tokens: separators -> '_', leading zeros dropped."""
+    return (
+        addr_raw.fill_null("").str.to_lowercase().str.extract_all(HOUSE_RE)
+        .list.eval(pl.element().str.replace_all(r"\s+", "").str.replace_all(r"[/\-#.]+", "_")
+                   .str.replace_all(r"(^|_|[a-z])0+(\d)", "${1}${2}"))
+        .list.unique().list.join(" ")
+    )
 # legal forms and filler words dropped before concatenating a name (English, Indian and French forms)
 CONCAT_DROP = (r"\b(private|limited|pvt|ltd|llc|l l c|llp|inc|incorporated|corp|corporation|co|company|plc"
                r"|group|enterprises|services|sarl|sas|sasu|sa|eurl|sci|snc|and|et|of|the|de|la|le|les|des|du"
@@ -58,8 +74,8 @@ def char_trigrams(texts: pl.Series) -> pl.Series:
 def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     """Prepared text for one source file and one country.
 
-    Columns: entity_id, name, addr, text, skel, skel_name, namenum, concat3, domainlike, addr_empty,
-    nonlatin.
+    Columns: entity_id, name, addr, text, skel, skel_name, namenum, concat3, domainlike, namehouse,
+    addr_empty, nonlatin.
     """
     d = (
         scan_source(split, source, country=country, columns=["entity_id", "business_name", "business_address"])
@@ -68,6 +84,7 @@ def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
             clean_expr(pl.col("business_name")).alias("name"),
             clean_expr(pl.col("business_address")).alias("addr"),
             pl.col("business_name").fill_null("").str.contains(NON_LATIN).alias("nonlatin"),
+            house_tokens(pl.col("business_address")).alias("house"),
         )
         .collect()
     )
@@ -83,7 +100,8 @@ def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
         skel_name=skeletonize(d["name"]),
         concat3=char_trigrams(concat),
         domainlike=(d["name"].str.split(" ").list.len() == 1) & (concat.str.len_chars() >= 8),
-    )
+        namehouse=(d["name"] + " " + d["house"]).str.strip_chars(),
+    ).drop("house")
 
 
 def fit_tfidf(texts: list[str], max_df: float):
@@ -169,7 +187,7 @@ def main() -> None:
         t1 = time.time()
         pr, q, p = run_country(args.split, country, tmap, s1_filter, args.chunk, args.threads)
         pairs.append(pr)
-        preps.append(pl.concat([q, p]).drop("text", "skel", "namenum", "concat3"))
+        preps.append(pl.concat([q, p]).drop("text", "skel", "namenum", "concat3", "namehouse"))
         print(f"[{country}] S1 {q.height:,} x pool {p.height:,} -> {pr.height:,} pairs "
               f"({pr.height / max(q.height, 1):.1f}/S1) in {time.time() - t1:.0f}s, peak RAM {peak_ram_gb():.1f} GB",
               flush=True)
