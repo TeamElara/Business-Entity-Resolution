@@ -87,11 +87,14 @@ re-learned map has 1,320 tokens and covers 94.7% of non-Latin test tokens (was 9
 | word + skel + noaddr + namenum | 41.5 | 0.978 | 0.993 | 0.986 | 0.966 |
 | all five blocks (+ concat) | 46.4 | 0.983 | 0.9945 | 0.990 | 0.972 |
 | **all six blocks (+ namehouse)** | **48.3** (p95 59, max 70) | **0.984** | **0.9951** | **0.990** | **0.976** |
+| **all six blocks, final code (with the zero-width joiner fix, as in v3)** | **48.3** (p95 59, max 70) | **0.985** | **0.9953** | **0.990** | **0.977** |
 
-By country (6 blocks): US 46.5 cands/S1, recall 0.990, oracle 0.997; India 51.0 cands/S1, recall
-0.976, oracle 0.992. By source: S2 recall 0.986, S3 0.983. No val S1 is left without candidates.
-Recall is flat across the number of true matches (0.983 to 0.986). (Measured before the zero-width
-joiner fix, which only adds recall.)
+By country (6 blocks, final code): US 46.5 cands/S1, recall 0.990, oracle 0.997; India 51.0 cands/S1,
+recall 0.977, oracle 0.993. By source: S2 recall 0.987, S3 0.984. No val S1 is left without candidates.
+Recall is flat across the number of true matches (0.983 to 0.986, before the fix). The rows above the last one were
+measured before the zero-width joiner fix in `text.py` (670b373); the last row is the code on main that
+the v3 run uses (re-measured 26 Sep, full val: recall 0.9849, oracle 0.9953; India recall 0.9761 -> 0.9773,
+oracle 0.9924 -> 0.9929; US unchanged).
 
 What each block contributes (6-block union, full val):
 

@@ -24,6 +24,7 @@ Changes from v2 (src/matching/v2.py, reused here):
     python -m src.matching.v3 rescore --t 0.85          # new decisions from the cache, minutes
 """
 import argparse
+import functools
 import gc
 import json
 import time
@@ -60,6 +61,8 @@ REC_FEATURES = ["q_tok_minidf", "p_tok_maxidf", "p_tok_minidf"]
 PAIR_FEATURES = v1.PAIR_FEATURES + OJ_FEATURES + REC_FEATURES
 REL_FEATURES = v2.REL_FEATURES
 EXTRA_FEATURES = ["rev_rank", "rev_gap", "rev_n_close", "orphan_prob"]
+# S1 no-match probability (Ojaswi's s1_zero model) and legal-form agreement (name_m has legal forms stripped)
+CP2_FEATURES = ["p_zero", "legal_eq", "legal_n"]
 
 
 # ------------------------------------------------------------------ stage 1
@@ -128,8 +131,62 @@ def extra_features(c: pl.DataFrame, split: str) -> pl.DataFrame:
     return c.with_columns([pl.lit(None, pl.Float32).alias(f) for f in EXTRA_FEATURES if f not in c.columns])
 
 
-def final_features(use_extra: bool):
-    return PAIR_FEATURES + REL_FEATURES + (EXTRA_FEATURES if use_extra else [])
+@functools.cache
+def _legal(split: str) -> pl.DataFrame:
+    return pl.concat([pl.read_parquet(v1.NORM_DIR / f"{split}_s{k}.parquet", columns=["entity_id", "legal_suffix"])
+                      for k in (1, 2, 3)]).with_columns(pl.col("legal_suffix").fill_null(""))
+
+
+@functools.cache
+def _zero(split: str) -> pl.DataFrame:
+    return pl.read_parquet(CAND_DIR / f"s1_zero_{split}.parquet").select("s1_id", pl.col("p_zero").cast(pl.Float32))
+
+
+def cp2_features(c: pl.DataFrame, split: str) -> pl.DataFrame:
+    """p_zero of the S1; legal_eq = 1 same legal form, 0 different, null unless both sides have one."""
+    lg = _legal(split)
+    c = (c.join(_zero(split), on="s1_id", how="left")
+         .join(lg.rename({"entity_id": "s1_id", "legal_suffix": "lq"}), on="s1_id", how="left")
+         .join(lg.rename({"entity_id": "cand_id", "legal_suffix": "lp"}), on="cand_id", how="left"))
+    has_q, has_p = pl.col("lq").fill_null("") != "", pl.col("lp").fill_null("") != ""
+    return c.with_columns(
+        pl.when(has_q & has_p).then((pl.col("lq") == pl.col("lp")).cast(pl.Float32)).alias("legal_eq"),
+        (has_q.cast(pl.Float32) + has_p.cast(pl.Float32)).alias("legal_n")).drop("lq", "lp")
+
+
+def orphan_ids() -> pl.DataFrame:
+    """cand_id of every train record that appears in some ground-truth match list."""
+    return truth_pairs(load_ground_truth()).select("cand_id").unique()
+
+
+def weights(c: pl.DataFrame, owned: pl.DataFrame, w: float) -> np.ndarray:
+    """Sample weight w for negatives whose record is an orphan (test has ~1.6x more of them)."""
+    orphan = (pl.col("label") == 0) & ~pl.col("cand_id").is_in(owned["cand_id"].implode())
+    return c.select(pl.when(orphan).then(w).otherwise(1.0)).to_series().to_numpy()
+
+
+def tune_weighted(c: pl.DataFrame, truth: pl.DataFrame, owned: pl.DataFrame, w: float, exclusive: bool = False):
+    """Best (F0.5, t, t1) when every orphan false positive counts w times (test-like precision)."""
+    n_true = truth.select("s1_id", pl.col("matched_ids").list.len().alias("n_true"))
+    c = c.with_columns(((pl.col("label") == 0) & ~pl.col("cand_id").is_in(owned["cand_id"].implode())).alias("orph"))
+    best = (0.0, None, None)
+    for t in [x / 100 for x in range(50, 97, 5)]:
+        for t1 in [x / 100 for x in range(30, int(t * 100) + 1, 5)]:
+            p = decide(c, t, t1, exclusive)
+            g = p.group_by("s1_id").agg((pl.col("label") == 1).sum().alias("tp"),
+                                        ((pl.col("label") == 0) & ~pl.col("orph")).sum().alias("fo"),
+                                        pl.col("orph").sum().alias("fr"))
+            d = n_true.join(g, on="s1_id", how="left").fill_null(0).with_columns((pl.col("fo") + w * pl.col("fr")).alias("fp"))
+            prec, rec = pl.col("tp") / (pl.col("tp") + pl.col("fp")), pl.col("tp") / pl.col("n_true")
+            f = d.select(pl.when(pl.col("n_true") == 0).then((pl.col("tp") + pl.col("fp") == 0).cast(pl.Float64))
+                         .when(pl.col("tp") == 0).then(0.0).otherwise(1.25 * prec * rec / (0.25 * prec + rec)).mean()).item()
+            if f > best[0]:
+                best = (f, t, t1)
+    return best
+
+
+def final_features(use_extra: bool, cp2: bool = False):
+    return PAIR_FEATURES + REL_FEATURES + (EXTRA_FEATURES if use_extra else []) + (CP2_FEATURES if cp2 else [])
 
 
 def decide(c: pl.DataFrame, t: float, t1: float, exclusive: bool) -> pl.DataFrame:
@@ -238,7 +295,7 @@ def cmd_train(args):
     pruners = [lgb.Booster(model_file=_paths(args.pruner_tag)[0].format(k)) for k in (0, 1)]
     text = pl.read_parquet(FEAT_DIR / "text_train.parquet")
     s1c = load_norm("train", 1).select(pl.col("entity_id").alias("s1_id"), "country")
-    feats = final_features(args.extra)
+    feats = final_features(args.extra, args.cp2)
 
     def pruned(name, oof):
         out = []
@@ -258,6 +315,8 @@ def cmd_train(args):
     val_c = v2.rel_features(pruned("val", False), text)
     if args.extra:
         fit_c, val_c = extra_features(fit_c, "train"), extra_features(val_c, "train")
+    if args.cp2:
+        fit_c, val_c = cp2_features(fit_c, "train"), cp2_features(val_c, "train")
     gc.collect()
     truth = add_is_val(load_ground_truth()).filter("is_val").drop("is_val")
     blocking_report(val_c.with_columns(pl.col("prune_prob").alias("block_score")), truth,
@@ -267,12 +326,15 @@ def cmd_train(args):
         truth_src, val_src = truth.join(src_s1, on="s1_id", how="semi"), val_c.join(src_s1, on="s1_id", how="semi")
     else:
         truth_src, val_src = truth, val_c
+    owned = orphan_ids()
+    wfit = weights(fit_c, owned, args.orphan_weight)
+    wval = weights(val_src, owned, args.orphan_weight)
     models = []
     for seed in range(args.seeds):
         params = dict(v1.FINAL_PARAMS, seed=SEED + seed)
-        dtrain = lgb.Dataset(fit_c.select(feats).to_numpy(), fit_c["label"].to_numpy(), feature_name=feats)
-        dval = lgb.Dataset(val_src.select(feats).to_numpy(), val_src["label"].to_numpy(), reference=dtrain)
-        m = lgb.train(params, dtrain, num_boost_round=6000, valid_sets=[dval],
+        dtrain = lgb.Dataset(fit_c.select(feats).to_numpy(), fit_c["label"].to_numpy(), weight=wfit, feature_name=feats)
+        dval = lgb.Dataset(val_src.select(feats).to_numpy(), val_src["label"].to_numpy(), weight=wval, reference=dtrain)
+        m = lgb.train(params, dtrain, num_boost_round=args.rounds, valid_sets=[dval],
                       callbacks=[lgb.early_stopping(150, verbose=False), lgb.log_evaluation(1000)])
         m.save_model(str(final_path).replace(".txt", f"_s{seed}.txt"))
         models.append(m)
@@ -282,8 +344,10 @@ def cmd_train(args):
     print("top features:", ", ".join(f"{f} {g:.0f}" for f, g in imp[:20]))
     X = val_c.select(feats).to_numpy()
     val_c = val_c.with_columns(pl.Series("prob", np.mean([m.predict(X) for m in models], axis=0), dtype=pl.Float32))
-    f_src, t, t1 = v1._tune(val_c.join(val_src.select("s1_id").unique(), on="s1_id", how="semi"), truth_src)
-    pred = v1.decide(val_c, t, t1)
+    f_src, t, t1 = tune_weighted(val_c.join(val_src.select("s1_id").unique(), on="s1_id", how="semi"), truth_src,
+                                 owned, args.tune_weight, not args.no_exclusive)
+    print(f"test-like tuning (orphan FP x{args.tune_weight}, exclusive={not args.no_exclusive}): F0.5 {f_src:.4f} at t={t}, t1={t1}")
+    pred = decide(val_c, t, t1, not args.no_exclusive)
     ref = macro_f05(pred.select("s1_id", "cand_id"), truth)
     per = v1._by_country(pred, truth, s1c)
     print(f"\nthresholds t={t}, t1={t1} (tuned on {'+'.join(args.countries) if args.countries else 'all'} val)")
@@ -294,6 +358,7 @@ def cmd_train(args):
     n = truth.height
     print(f"val: {val_c.height / n:.2f} cands/S1, {pred.height / n:.2f} matches/S1")
     json.dump({"t": t, "t1": t1, "final_k": args.final_k, "p_min": args.p_min, "val_f05": ref, "extra": args.extra,
+               "cp2": args.cp2, "features": feats, "rounds": args.rounds, "orphan_weight": args.orphan_weight, "tune_weight": args.tune_weight, "val_testlike_f05": f_src,
                "seeds": args.seeds, "pruner_tag": args.pruner_tag, "val_by_country": per,
                "countries": args.countries}, open(params_path, "w"), indent=2)
     val_c.select("s1_id", "cand_id", "label", "prune_prob", "block_rank", "prob") \
@@ -328,7 +393,7 @@ def cmd_rescore(args):
     from src.common import write_outputs
     _, final_path, params_path = _paths(args.tag)
     prm = json.load(open(params_path))
-    feats = final_features(prm["extra"])
+    feats = prm.get("features") or final_features(prm["extra"])
     models = [lgb.Booster(model_file=str(final_path).replace(".txt", f"_s{s}.txt")) for s in range(prm["seeds"])]
     final_k = args.final_k or prm["final_k"]
     t = args.t if args.t is not None else prm["t"]
@@ -341,6 +406,8 @@ def cmd_rescore(args):
             c = v2.rel_features(select_candidates(pl.read_parquet(f), final_k, prm["p_min"]), text)
             if prm["extra"]:
                 c = extra_features(c, "test")
+            if prm.get("cp2"):
+                c = cp2_features(c, "test")
             # the final model scores exactly the candidate set c
             c = c.with_columns(pl.Series("prob", np.mean([m.predict(c.select(feats).to_numpy()) for m in models], axis=0),
                                          dtype=pl.Float32))
@@ -369,6 +436,10 @@ def main():
     ap.add_argument("--p-min", type=float, default=P_MIN)
     ap.add_argument("--extra", action="store_true", help="use reverse-search / orphan features")
     ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--cp2", action="store_true", help="add p_zero and legal-form features")
+    ap.add_argument("--rounds", type=int, default=6000, help="max boosting rounds of the final model")
+    ap.add_argument("--orphan-weight", type=float, default=1.0, help="training weight of orphan negatives")
+    ap.add_argument("--tune-weight", type=float, default=1.6, help="orphan FP weight when tuning thresholds")
     ap.add_argument("--t", type=float, default=None)
     ap.add_argument("--t1", type=float, default=None)
     ap.add_argument("--no-exclusive", action="store_true")
