@@ -75,10 +75,54 @@ keeps the raw model output so train and test features are on the same scale.
 France has no training labels (train has only India and US), so its scores come from a model that
 never saw France: treat the France numbers with care.
 
+### Leakage check: folds grouped by owner S1
+
+With random folds, an S2 and an S3 record of the same business can sit in different folds, so the
+model could recognise a twin. Re-run with folds grouped by owner S1 (all records of one S1 in the
+same fold, `crc32(s1_id) % 5`; orphans by `crc32(rec_id) % 5`), `python -m src.blocking.orphan
+--group-by-s1`:
+
+| OOF AUC | random folds | grouped by S1 |
+|---|---|---|
+| all | 0.9736 | 0.9736 |
+| US | 0.9817 | 0.9817 |
+| India | 0.9569 | 0.9568 |
+
+The two OOF files agree closely (correlation 0.998, mean |diff| 0.011, 1% of records differ by
+more than 0.1): no twin leakage (leaves hold at least 500 records). `orphan_train.parquet` is kept;
+`orphan_train_grouped.parquet` is the grouped version.
+
+## S1 with no match (`src/blocking/s1_zero.py`)
+
+`p_zero` = probability that an S1 has no match at all (5.58% of train S1, same in India and US).
+Same style: LightGBM, no country feature, train S1 scored out-of-fold with folds by
+`crc32(s1_id) % 5`, test S1 by one model fitted on train S1. Features: the S1 record (lengths,
+digits, legal form, compound house number, S1 name twins, pool records with the same name), the
+reverse search seen from the S1 (how many records have it in their top 10 / as their best S1, best
+and second-best score, counts above 0.7 / 0.9, best namenum score), and the orphan scores of the
+records that pick it as their best S1 (sum of 1 - orphan_prob, lowest orphan_prob, how many below
+0.5; train uses the S1-grouped OOF orphan scores).
+
+| | value |
+|---|---|
+| OOF AUC, all / India / US | 0.9849 / 0.9781 / 0.9885 (5 folds 0.9846–0.9852) |
+| p_zero > 0.5 | 122,511 train S1 flagged, precision 0.730, recall 0.726 |
+| p_zero > 0.8 | 40,315 flagged, precision 0.877, recall 0.287 |
+| p_zero > 0.9 | 11,965 flagged, precision 0.943, recall 0.092 |
+| top features | lowest orphan_prob of its rank-1 records 73%, expected matched records 11% |
+
+Test: mean p_zero France 0.054, India 0.051, US 0.057; EM-corrected share of S1 without a match
+France 5.2%, India 4.7%, US 5.7%, i.e. about the train rate (5.6%). The extra test orphans do not
+come with more S1 without matches, consistent with the forensics (orphans are lone businesses).
+
+Output `data/cand/s1_zero_{split}.parquet` (`s1_id, p_zero`) and `data/cand/s1_zero_auc.json`.
+
 ## Run
 
 ```
 python -m src.blocking.reverse --split train     # ~1.6 h on 8 threads, peak RAM 2.8 GB
 python -m src.blocking.reverse --split test      # ~40 min
 python -m src.blocking.orphan                    # ~11 min, needs both reverse files
+python -m src.blocking.orphan --group-by-s1      # ~8 min, train only (leakage check)
+python -m src.blocking.s1_zero                   # ~9 min, needs the grouped orphan file
 ```

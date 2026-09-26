@@ -15,8 +15,13 @@ scored by a model fitted on all train records.
 
 Output: data/cand/orphan_{split}.parquet with rec_id, orphan_prob. AUC is printed and saved.
 
-Usage: python -m src.blocking.orphan
+--group-by-s1: folds grouped by the owner S1 instead (all records of one S1 in the same fold,
+crc32(s1_id) % 5; orphans by crc32(rec_id) % 5), so an S2/S3 twin of a held-out record is never in
+the training folds. Train only: writes orphan_train_grouped.parquet and orphan_auc_grouped.json.
+
+Usage: python -m src.blocking.orphan [--group-by-s1]
 """
+import argparse
 import json
 import time
 import zlib
@@ -141,12 +146,16 @@ def build(split: str) -> pl.DataFrame:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--group-by-s1", action="store_true", help="OOF folds grouped by owner S1 (train only)")
+    args = ap.parse_args()
     t0 = time.time()
     tr = build("train")
-    matched = truth_pairs(load_ground_truth()).select(pl.col("cand_id").alias("rec_id")).unique()
-    tr = tr.join(matched.with_columns(pl.lit(0, pl.Int8).alias("y")), on="rec_id", how="left") \
-        .with_columns(pl.col("y").fill_null(1))
-    fold = np.array([zlib.crc32(x.encode()) % 5 for x in tr["rec_id"].to_list()])
+    # every record belongs to at most one S1 in the ground truth
+    owner = truth_pairs(load_ground_truth()).select(pl.col("cand_id").alias("rec_id"), "s1_id").unique("rec_id")
+    tr = tr.join(owner, on="rec_id", how="left").with_columns(pl.col("s1_id").is_null().cast(pl.Int8).alias("y"))
+    fold_key = tr["s1_id"].fill_null(tr["rec_id"]) if args.group_by_s1 else tr["rec_id"]
+    fold = np.array([zlib.crc32(x.encode()) % 5 for x in fold_key.to_list()])
     X, y = tr.select(FEATURES).to_numpy().astype(np.float32), tr["y"].to_numpy()
     print(f"train orphans {y.mean():.3f}", flush=True)
     oof = np.zeros(len(y), dtype=np.float32)
@@ -166,6 +175,14 @@ def main() -> None:
     train_dist = {"orphans": prob_summary(oof[y == 1]), "matched": prob_summary(oof[y == 0])}
     for k, v in train_dist.items():
         print(f"OOF orphan_prob, {k}:", {a: round(b, 3) for a, b in v.items()}, flush=True)
+    if args.group_by_s1:
+        pl.DataFrame({"rec_id": tr["rec_id"], "orphan_prob": oof}).write_parquet(CAND_DIR / "orphan_train_grouped.parquet")
+        (CAND_DIR / "orphan_auc_grouped.json").write_text(json.dumps(
+            {"folds": "grouped by owner S1 (orphans by rec_id)", "oof_auc": auc,
+             "train_mean_oof_prob": {c: float(oof[tr_country == c].mean()) for c in sorted(set(tr_country))},
+             "train_prob_dist": train_dist}, indent=1))
+        print(f"done (train only) in {time.time() - t0:.0f}s", flush=True)
+        return
     pl.DataFrame({"rec_id": tr["rec_id"], "orphan_prob": oof}).write_parquet(CAND_DIR / "orphan_train.parquet")
 
     fit = np.where(rng.random(len(y)) < 0.6)[0]
