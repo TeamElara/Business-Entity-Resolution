@@ -79,9 +79,12 @@ at most eight. The **measured** test median, exact maximum, reduction ratio,
 and a full cutoff trade-off table for the final package have not yet been
 provided; they must be checked on the actual final candidate file. On main,
 Ojaswi has also added experimental word, consonant-skeleton, and missing-
-address blocks (`src/blocking/stage1.py`). No validated final metrics or
-integration into upload #1 are yet available, so they are not substituted
-into this result.
+address blocks (`src/blocking/stage1.py`). The team tracker records a
+**20,000-validation-S1 sample per country** for their union: 94.5% India
+true-pair recall at 38.5 candidates/S1 and 98.4% US recall at 35.4
+candidates/S1. These are stage-1 sample figures, not full-validation oracle,
+final-pruner, or uploaded-model measurements. No integration into upload #1
+is claimed.
 
 **Submission-audit check:** upload #1 applies LightGBM to the wide pool to
 select the top eight, while the submitted `candidate_pairs.tsv` contains
