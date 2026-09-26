@@ -39,6 +39,10 @@ $env:DATA_RAW = "C:\path\to\student_resource\dataset"
 .\.venv\Scripts\python.exe utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$env:DATA_RAW\test" --check-ids
 ```
 
+If `python` is not on PATH on Windows, use the full path to an installed
+Python 3.11+ executable for the first `-m venv` command; subsequent commands
+use the newly created `.venv\Scripts\python.exe` directly.
+
 On macOS/Linux, use `python3.11 -m venv .venv`, `.venv/bin/python`, and
 `export DATA_RAW=/path/to/student_resource/dataset`. LightGBM may require
 `libomp` on macOS. Reverse search, feature construction and the full test pass
