@@ -59,6 +59,8 @@ def pair_agreement(pairs: pl.DataFrame, norm_dir: Path) -> pl.DataFrame:
         pl.col("country"),
         pl.col("house_no").alias("q_old"),
         pl.col("house_no2").alias("q_new"),
+        pl.col("addr_norm").alias("q_addr_old"),
+        pl.col("addr_norm2").alias("q_addr_new"),
     )
     p = pl.concat([
         read_needed(norm_dir / f"train_s{source}.parquet", needed_cand)
@@ -68,6 +70,8 @@ def pair_agreement(pairs: pl.DataFrame, norm_dir: Path) -> pl.DataFrame:
         pl.col("country").alias("cand_country"),
         pl.col("house_no").alias("p_old"),
         pl.col("house_no2").alias("p_new"),
+        pl.col("addr_norm").alias("p_addr_old"),
+        pl.col("addr_norm2").alias("p_addr_new"),
     )
     if q.height != needed_s1.height or p.height != needed_cand.height:
         raise ValueError(
@@ -83,6 +87,10 @@ def pair_agreement(pairs: pl.DataFrame, norm_dir: Path) -> pl.DataFrame:
          & (pl.col("q_old") == pl.col("p_old"))).alias("old_agree"),
         (pl.col("q_new").is_not_null() & pl.col("p_new").is_not_null()
          & (pl.col("q_new") == pl.col("p_new"))).alias("new_agree"),
+        ((pl.col("q_addr_old") != "") & (pl.col("p_addr_old") != "")
+         & (pl.col("q_addr_old") == pl.col("p_addr_old"))).alias("old_addr_agree"),
+        ((pl.col("q_addr_new") != "") & (pl.col("p_addr_new") != "")
+         & (pl.col("q_addr_new") == pl.col("p_addr_new"))).alias("new_addr_agree"),
     )
 
 
@@ -104,6 +112,17 @@ def report(frame: pl.DataFrame) -> None:
         new_rate = 100 * new / n if n else 0
         print(f"| {name} | {n:,} | {old:,} ({old_rate:.3f}%) | "
               f"{new:,} ({new_rate:.3f}%) | {new_rate - old_rate:+.3f} |")
+    print("\nExact normalized-address agreement (nonblank on both sides):")
+    print("| Group | Old agree | New agree | Delta (pp) |")
+    print("| --- | ---: | ---: | ---: |")
+    for name, predicate in groups:
+        subset = frame.filter(predicate)
+        n = subset.height
+        old = subset["old_addr_agree"].sum() or 0
+        new = subset["new_addr_agree"].sum() or 0
+        old_rate = 100 * old / n if n else 0
+        new_rate = 100 * new / n if n else 0
+        print(f"| {name} | {old_rate:.3f}% | {new_rate:.3f}% | {new_rate - old_rate:+.3f} |")
     print("\nBy country:")
     for country in sorted(frame["country"].unique().to_list()):
         print(f"\n{country}")

@@ -49,7 +49,7 @@ HOUSE2_TOKEN = r"[A-Za-z]?-?\d{1,7}(?:[-/.][A-Za-z0-9]{1,6}){0,5}(?:\s*(?:bis|te
 HOUSE2_FR_TOKEN = r"[A-Za-z]?-?\d{1,7}(?:[-/.][A-Za-z0-9]{1,6}){0,5}(?:\s*(?:bis|ter|[A-Za-z]))?"
 HOUSE2_STREET_TAIL = (
     r"\s+(?:rue|r\.?|route|rte\.?|chemin|ch\.?|avenue|av\.?|ave\.?|"
-    r"boulevard|bd\.?|place|pl\.?|impasse|imp\.?|street|st\.?|road|rd\.?|"
+    r"boulevard|bd\.?|place|pl\.|impasse|imp\.?|street|st\.?|road|rd\.?|"
     r"lane|ln\.?|highway|hwy\.?)(?:\s|$)"
 )
 HOUSE2_STREET = (
@@ -64,6 +64,15 @@ HOUSE2_FR_STREET = (
 HOUSE2_UNIT_THEN_STREET = (
     r"(?i)(?:^|[,;])\s*(?:apt|apartment|unit|suite|ste|flat|floor|flr)"
     r"\s*[#:]?\s*[A-Za-z0-9-]+\s*[,;]\s*#?\s*(" + HOUSE2_TOKEN + r")(?:\s|[,;]|$)"
+)
+HOUSE2_BUILDING_MARKER = (
+    r"(?i)(?:^|[\s,;#])(?:h\s*\.?\s*no|house\s*no|door\s*no|"
+    r"plot\s*no|pl\s*\.?\s*no|property\s*no)\s*[:#.-]?\s*("
+    + HOUSE2_TOKEN + r")(?:\s|[.,;:-]|$)"
+)
+HOUSE2_GLUED_HOUSE = (
+    r"(?i)(?:^|[\s,;#])(?:house\s*no|h\s*\.?\s*no)\s*[:#.-]?\s*"
+    r"(\d{1,7})[a-z]{2,}"
 )
 HOUSE2_MARKER = (
     r"(?i)(?:^|[\s,;#])(?:h\s*\.?\s*no|house\s*no|door\s*no|"
@@ -149,6 +158,8 @@ def house_number_v2_expr(address: pl.Expr, postcode: pl.Expr, country: pl.Expr) 
         pl.when(france).then(raw.str.extract(HOUSE2_FR_STREET, 1)).otherwise(None),
         raw.str.extract(HOUSE2_STREET, 1),
         raw.str.extract(HOUSE2_UNIT_THEN_STREET, 1),
+        raw.str.extract(HOUSE2_BUILDING_MARKER, 1),
+        raw.str.extract(HOUSE2_GLUED_HOUSE, 1),
         raw.str.extract(HOUSE2_MARKER, 1),
         raw.str.extract(HOUSE2_SEGMENT, 1),
         house_number_expr(address, postcode),

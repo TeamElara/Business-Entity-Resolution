@@ -40,6 +40,9 @@ def test_street_number_wins_over_unit_and_multiple_numbers():
     assert "unit 4" not in us["addr_norm2"]
     assert row("DC, WASHINGTON, 2117 F STREET", "US")["house_no2"] == "2117"
     assert row("90 N S RD, KOLKATA", "India")["house_no2"] == "90"
+    assert row("#699 Pl No . 128, Fl No. 20, Pune", "India")["house_no2"] == "128"
+    assert row("PLOT NO:506-, F NO: 201 JANANI MARVEL APTS", "India")["house_no2"] == "506"
+    assert row("#0879 House No. 139Goudra Oni, Haveri", "India")["house_no2"] == "139"
 
 
 def test_legacy_fields_are_untouched():
