@@ -39,11 +39,20 @@ the same business appearing in several source rows is counted several times.
    changing `house_no`. The normalized full address already retains the suffix;
    changing the extracted field can alter model features and needs validation.
 4. Use Arihant's `france_review_v1.csv` to prioritize likely v1 match errors.
-   The first 100 of its 200 sampled S1 blocks were reviewed separately;
-   those judgments are **manual inferences, not France ground-truth labels**.
-   The marked CSV is kept outside Git for team handoff.
+   The first 100 of its 200 sampled S1 blocks were reviewed separately:
+   251 predicted pairs marked `ok`, 31 marked `wrong`, one rejected pair
+   marked `missed`, and seven rows given an ambiguity note instead of a
+   forced verdict. These are **manual inferences, not France ground-truth
+   labels**. The marked CSV is kept outside Git for team handoff.
 
 Any accepted fix requires targeted tests, full normalization regression
 checks (including unchanged US/India outputs), and a new model/test run before
 the final submission. Do not silently apply it to the already selected v2
 outputs.
+
+The isolated [v4 candidate PR #4](https://github.com/TeamElara/Business-Entity-Resolution/pull/4)
+implements only the France-specific `Rte.` and `EI` changes. On regenerated
+test normalization, all US/India source/country row counts and full-row
+hash checksums match the prior outputs exactly. France `addr_norm` changes
+for 398 S1 / 5,781 S2 / 5,812 S3; `name_core`/`legal_suffix` change for
+4,183 S1 / 7,339 S2 / 7,435 S3. No model/leaderboard improvement is claimed.
