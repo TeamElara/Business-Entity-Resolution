@@ -2,11 +2,11 @@
 
 **Team:** Team Elara (Mahatva Goel, Arihant, Ojaswi)
 
-**Status (26 September 2026):** selected v2 pipeline, **validation measured; v2 test outputs/public leaderboard pending**. The latest confirmed public upload is still #2 (v1). Reconcile this document to the exact final files before packaging.
+**Status (26 September 2026):** v3 with orphan and reverse-search features is the current candidate. Final code tag, test outputs, validator result, and v3 leaderboard score are pending. Reconcile this draft to the exact selected files before packaging.
 
 ## 1. Executive summary
 
-For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. Our selected v2 pipeline uses multilingual normalization, five complementary *internal* retrieval blocks, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. Across 220,907 held-out US/India S1s, its chosen top-six setting scores macro F0.5 **0.9689** with 4.99 validation candidates/S1. This is **not yet a public or private leaderboard score**; upload #2 (v1) currently has the latest confirmed public score, **0.919**.
+For each deduplicated Source 1 (S1) business, we find zero or more same-entity Source 2/3 (S2/S3) records. The v3 candidate uses multilingual normalization, a wide eight-block internal retrieval union, a LightGBM pruner, and a separate LightGBM matcher that scores **only the final candidate set**. The reported top-six validation macro F0.5 is **0.9739** with 5.05 candidates/S1 and a 0.9938 oracle ceiling. These are **validation**, not public/private leaderboard results. The latest team-reported public score is **0.924** from v2 (`t=0.85`); v3 upload and final pick are pending.
 
 ## 2. Methodology
 
@@ -22,28 +22,28 @@ Retrieval is partitioned by the input country string, which is treated as **open
 
 ## 3. Candidate generation and blocking
 
-**Selected v2 cascade:** normalization/text preparation → wide stage 1 → 52 pair features → LightGBM pruner → **final candidates** (`candidate_pairs.tsv`) → separate LightGBM matcher on exactly those candidates. Wide stage 1 unions five blocks per country: name char-four-gram TF-IDF top 30; address word-one/two-gram TF-IDF top 30; and Ojaswi's word TF-IDF on name+address top 20, consonant-skeleton TF-IDF top 20, and name skeleton against no-address candidates top 10. The two matching blocks use Mahatva's normalized files; the three Ojaswi blocks use her text preparation and non-validation-trained Indic token map. All five are **internal**; the pruned list, not the union, is submitted.
+**V3 cascade:** normalization/text preparation → wide stage 1 → pair features → LightGBM pruner → **final candidates** (`candidate_pairs.tsv`) → separate LightGBM matcher on exactly those candidates. Stage 1 unions Arihant's name and address TF-IDF blocks with all six of Ojaswi's blocks: word, consonant skeleton, no-address skeleton, name+address-number, concatenated-name, and name+house-number. The first two use Mahatva's normalized files; Ojaswi's blocks use her text preparation and non-validation-trained Indic token map. All eight are **internal**; the pruned list, not the union, is submitted.
 
-Two pruners trained on separate halves of the fit sample produce averaged probabilities. The chosen setting keeps at most **six** candidates per S1 with pruner probability **≥0.003**. Validation results against 764,025 true pairs:
+Two pruners trained on separate halves of the fit sample produce averaged probabilities. The candidate setting keeps at most **six** candidates per S1 with pruner probability **≥0.003**. The reported v3 final set averages **5.05 candidates/S1**, with **0.9938 oracle F0.5**. Exact v3 pair recall, zero-candidate count, and test-file statistics are pending. The following v2 measurements are historical comparisons, **not** v3 final-set metrics:
 
-| v2 stage / cutoff | Avg candidates/S1 | True-pair recall | Oracle macro F0.5 | Model macro F0.5 |
+| Historical v2 stage / cutoff | Avg candidates/S1 | True-pair recall | Oracle macro F0.5 | Model macro F0.5 |
 | --- | ---: | ---: | ---: | ---: |
 | Wide stage 1, unpruned | 84.3 | 0.9845 | 0.9946 | — |
 | Final top 8 + p ≥ 0.003 | 5.66 | 0.9807 | 0.9938 | **0.9703** |
 | **Final top 6 + p ≥ 0.003 (chosen)** | **4.99** | **0.9643** | **0.9917** | **0.9689** |
 | Final top 6 + p ≥ 0.01 | 4.58 | not reported | 0.9915 | not reported |
 
-Top six costs 0.0014 validation F0.5 versus top eight but retains **13% fewer** candidates. The team stated this choice rule before seeing the comparison: favor the smaller list if the score loss is below 0.002, because candidate-set size also matters in the final review. At top six, the US has 5.00 candidates/S1, pair recall 0.9720 and oracle 0.9948; India has 4.98, pair recall 0.9528 and oracle 0.9871. There are 893 zero-candidate validation S1s (0.4%). The **test** total, mean/median/maximum, zero-candidate count, country coverage and reduction ratio must still be measured from the exact selected output file.
+V2 top six cost 0.0014 validation F0.5 versus top eight but retained 13% fewer candidates. Those v2 country-wise and zero-candidate statistics must not be carried over to v3. The **test** total, mean/median/maximum, zero-candidate count, country coverage and reduction ratio must be measured from the exact selected v3 output file.
 
-Ojaswi independently measured all **five of her own blocks** (adding `namenum` and `concat` to the three integrated above): on full validation, 46.4 stage-1 candidates/S1, pair recall 0.983, oracle 0.9945. These newer blocks are **not in the measured matching v2 pipeline**; they may be tested in a later version. Her separate pruner reached oracle 0.9866 at 4.9 candidates/S1 on an earlier three-block stage. The team selected Arihant's matching pruner for v2; these alternative figures must not be substituted for v2 or final-file metrics.
+Ojaswi independently measured all **six of her own blocks**: 48.3 stage-1 candidates/S1, pair recall 0.984, oracle 0.9951 on full validation. This is a standalone retrieval measurement, not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
 
 ## 4. Matching model
 
 Mahatva's normalizer preserves raw text, cleaned `name_core`, addresses, script, and Devanagari `name_latin` learned from **non-validation** Hindi/Latin pairs with a rule fallback. Ojaswi's text path folds Latin accents, normalizes domains/digit look-alikes, romanizes additional Indic scripts using non-validation token alignments plus a built-in fallback, and builds consonant skeletons. Neither token map uses validation labels.
 
-V2 pruner training uses fit sample A (80,000 non-validation S1s per country, two folds). The final matcher uses out-of-fold pruner candidates from A plus sample B (120,000 more non-validation S1s per country): **398,201 S1s and 1.99 million candidate pairs**. The pruner has **52 pair features**: name/address similarities and ranks, tolerant house/number comparison, block scores/ranks, how many blocks found a pair, name rarity and token IDF. The final matcher adds **22 per-S1 relative features**, computed only within the pruned list: probability/rank gaps, sibling name/address agreement, and new sibling house-number support. Thresholds selected on validation are **0.70** (all qualifying pairs) and **0.55** (best pair fallback). There is no country one-hot feature.
+V3 retains the v2 training framework: non-validation fit sample A for two pruner folds, out-of-fold pruner candidates from A plus fit sample B for the final matcher. V2 used 398,201 S1s and 1.99 million candidate pairs; v3 training-set counts should be taken from the exact v3 run. The pair features cover name/address similarities and ranks, tolerant house/number comparison, block scores and ranks, block overlap, name rarity and token IDF. The final matcher adds per-S1 relative features and v3's `orphan_prob` plus reverse-search rank/gap signals. `orphan_prob` estimates whether a candidate S2/S3 record may be unmatched; reverse search ranks S1s from a candidate's perspective. The test decision uses **0.75** for qualifying pairs and **0.55** for the best-pair fallback, then assigns each S2/S3 record to at most one S1. There is no country one-hot feature.
 
-The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0.8982**, but the selected v2 cross-country retraining check has **not yet been reported**. The Indic maps use India non-validation matches, so a US-only model with those maps would not be a pure zero-shot preprocessing experiment. France has no supplied match labels.
+The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0.8982**, but a comparable v3 cross-country retraining check has **not yet been reported**. The Indic maps use India non-validation matches, so a US-only model with those maps would not be a pure zero-shot preprocessing experiment. France has no supplied match labels; manual review is qualitative, not a France F0.5 estimate.
 
 ## 5. Results and error analysis
 
@@ -51,29 +51,32 @@ The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0
 | --- | ---: | ---: | ---: | ---: |
 | Upload #1, v0 | 0.9043 | 0.9148 / 0.8886 | 0.886 | 8.00 |
 | Upload #2, v1 | 0.9525 | 0.9559 / 0.9473 | **0.919** | 5.45 |
-| **Selected v2, top six** | **0.9689** | **0.9722 / 0.9640** | **pending** | **pending** |
+| V2, top six | 0.9689 | 0.9722 / 0.9640 | **0.924 reported** (`t=0.85`) | pending |
+| V3 base, top six | 0.9709 | pending | pending | pending |
+| **V3 + orphan/reverse, top six** | **0.9739 reported** | **0.9759 / 0.9709 reported** | **pending** | **pending** |
 
-Upload #2 passed `validate_submission.py --check-ids` with no match outside the candidate list. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. V2 has not yet had that public confirmation.
+Upload #2 passed `validate_submission.py --check-ids` with no match outside the candidate list. That check must be repeated on the **exact v3 final files**. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. The reported v3 validation numbers and v2 public score came from team updates; final-run artifacts and a public v3 upload still need reconciliation.
 
-Real v1 validation error analysis (not v2): **8,618 false positives**, **37,745** true matches retrieved but rejected by the final model, **1,071** cut by the pruner, and **35,065** absent from stage 1. Frequent false positives are a similar name at a different address or another business at the same address; rejected true matches often have a blank address or a slightly different house number. V2's wider stage reduces missing true pairs from 35,065 to **11,844** before pruning, but full v2 false-positive/false-negative analysis is still needed. No private score or France label score is claimed.
+Real v1 validation error analysis (not v3): **8,618 false positives**, **37,745** true matches retrieved but rejected by the final model, **1,071** cut by the pruner, and **35,065** absent from stage 1. Frequent false positives are a similar name at a different address or another business at the same address; rejected true matches often have a blank address or a slightly different house number. V2's wider stage reduced missing true pairs to **11,844** before pruning. V3 false-positive/false-negative analysis and the France manual review are pending incorporation. No private score or France label score is claimed.
 
 ## 6. Conclusion
 
-The selected v2 pipeline increases validation pair recall at wide stage 1 to 0.9845, then reduces 84.3 comparisons/S1 to 4.99 final candidates/S1 while retaining a 0.9917 oracle ceiling. It improves validation F0.5 over the confirmed v1 upload, but the **actual v2 test file, validator result and public leaderboard score are pending**. Freeze the selected code and outputs, measure their candidate statistics, then reconcile this document and the final zip to that same run.
+The v3 candidate raises reported validation macro F0.5 to **0.9739**, compared with 0.9689 for v2, at **5.05 final candidates/S1** and a **0.9938 oracle ceiling**. This is promising but does not guarantee a better test or private-leaderboard result. Freeze the selected code and outputs, measure the exact test candidate statistics, verify `--check-ids`, and reconcile this document and final zip to that same run.
 
 ## Appendix A. Reproduction and final package
 
-With pinned dependencies and the supplied raw TSVs under `data/raw`, the selected top-six v2 commands are:
+With pinned dependencies and the supplied raw TSVs located via `DATA_RAW`, the current v3 candidate commands are (full environment instructions in `RUN.md`):
 
 ```text
 python -m src.normalize.run --split all
-python -m src.matching.v2 features
-python -m src.matching.v2 prune
-cp data/models/v2_pruner_0.txt data/models/v2_pruner_k6_0.txt
-cp data/models/v2_pruner_1.txt data/models/v2_pruner_k6_1.txt
-python -m src.matching.v2 train --tag k6 --final-k 6 --p-min 0.003
-python -m src.matching.v2 test --tag k6
-python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
+python -m src.blocking.reverse --split train
+python -m src.blocking.reverse --split test
+python -m src.blocking.orphan
+python -m src.matching.v3 features
+python -m src.matching.v3 prune
+python -m src.matching.v3 train --tag extra --final-k 6 --p-min 0.003 --extra
+python -m src.matching.v3 test --tag extra --t 0.75 --t1 0.55
+python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$DATA_RAW/test" --check-ids
 ```
 
-The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` are the measurement records. If a later pipeline wins, **replace all affected commands and figures before packaging**.
+`extra` is a local tag, **not yet the frozen final tag**. The reported validation score may be before the test-only exclusivity decision; a directly comparable post-exclusivity validation check is pending. The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` preserve prior measurements. If a later pipeline wins, **replace all affected commands and figures before packaging**.
