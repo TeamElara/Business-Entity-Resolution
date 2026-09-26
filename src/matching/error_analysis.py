@@ -4,7 +4,8 @@ Splits the macro F0.5 loss into: false positives, true matches rejected by the f
 true matches cut by the pruner, and true matches never retrieved by stage 1; then puts each
 error into a category using the pair features, and prints examples with the raw records.
 
-    python -m src.matching.error_analysis --tag pm          # data/feat/v1_val_scored_pm.parquet
+    python -m src.matching.error_analysis --tag pm                 # v1: data/feat/v1_val_scored_pm.parquet
+    python -m src.matching.error_analysis --version v2 --tag k6    # v2: data/feat/v2/val_scored_k6.parquet
 """
 import argparse
 import json
@@ -92,17 +93,23 @@ def examples(df, cat_col, cats, n, txt, header):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--version", choices=["v1", "v2"], default="v1")
     ap.add_argument("--tag", default="pm")
     ap.add_argument("--examples", type=int, default=6)
     args = ap.parse_args()
     sfx = f"_{args.tag}" if args.tag else ""
-    prm = json.load(open(MODEL_DIR / f"v1_params{sfx}.json"))
+    prm = json.load(open(MODEL_DIR / f"{args.version}_params{sfx}.json"))
     t, t1 = prm["t"], prm["t1"]
     s1c = pl.read_parquet(NORM_DIR / "train_s1.parquet", columns=["entity_id", "country"]).rename({"entity_id": "s1_id"})
     truth = add_is_val(load_ground_truth()).filter("is_val").drop("is_val").join(s1c, on="s1_id")
     tp = truth_pairs(truth.drop("country")).join(s1c, on="s1_id")
-    cand = pl.read_parquet(FEAT_DIR / f"v1_val_scored{sfx}.parquet")
-    stage1 = pl.read_parquet(FEAT_DIR / "v1_val.parquet", columns=["s1_id", "cand_id", *CTX])
+    if args.version == "v1":
+        cand = pl.read_parquet(FEAT_DIR / f"v1_val_scored{sfx}.parquet")
+        stage1 = pl.read_parquet(FEAT_DIR / "v1_val.parquet", columns=["s1_id", "cand_id", *CTX])
+    else:
+        cand = pl.read_parquet(FEAT_DIR / "v2" / f"val_scored{sfx}.parquet")
+        stage1 = pl.concat([pl.read_parquet(f, columns=["s1_id", "cand_id", *CTX])
+                            for f in sorted((FEAT_DIR / "v2" / "val").glob("*.parquet"))])
     cand = cand.join(stage1, on=["s1_id", "cand_id"], how="left").join(s1c, on="s1_id")
     pred = decide(cand, t, t1)
     f = macro_f05_fast(pred, truth)
