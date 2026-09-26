@@ -2,177 +2,84 @@
 
 **Team:** Team Elara (Mahatva Goel, Arihant, Ojaswi)
 
-**Document status:** 26 September 2026, verified account of **live upload #1**; not yet reconciled with a final package.
-
-**Confirmed upload:** 25 September 2026, commit `8d7d4c4` (see `docs/submission_log.md`).
+**Status (26 September 2026):** methodology for **confirmed upload #2**. It is not yet the final-package version: the team is comparing pruners and has not frozen the final output files or candidate statistics.
 
 ## 1. Executive summary
 
-For every Source 1 (S1) business, we search Source 2 and Source 3 (S2/S3)
-for zero or more records of the same entity. The confirmed upload uses
-same-country TF-IDF name/address retrieval, a LightGBM pair scorer, top-eight
-candidate pruning, and precision-oriented thresholds. Its held-out macro
-F0.5 is **0.9043** and its public leaderboard score is **0.886**. These are
-different populations; the private score is not known. Since upload #1,
-normalization and a new wide-blocking stage have been developed, but neither
-is claimed here as part of that uploaded result.
+For each deduplicated Source 1 (S1) business, our system finds zero or more same-entity records from Sources 2 and 3 (S2/S3). The current uploaded solution uses multilingual text normalization, a wide name/address search, a LightGBM candidate pruner, and a separate LightGBM matching model that scores **only the final candidate set**. On 220,907 held-out US/India S1s it reaches macro F0.5 **0.9525**; upload #2 scored **0.919** on the public leaderboard. The private score and France-specific F0.5 are unknown.
 
 ## 2. Methodology
 
 ### 2.1 Problem analysis
 
-The provided train set contains 2,206,821 S1 records and 10,320,219 S2/S3
-records from India and the US. The test set also includes France (259,452
-S1 records), which has no training labels. Names vary by legal suffix,
-abbreviation, word order, typo, domain-style text, accent, and Indic script;
-addresses vary by abbreviation, component order, and missing information.
-About 2.3–3.7% of noisy-source addresses are blank. We read TSVs as strings
-with tabs and quoting disabled, preserving IDs and empty-list singletons.
-No external business registry, API, geocoder, or test-label lookup was used.
+Training contains 2,206,821 S1 records and 10,320,219 S2/S3 records from India and the US. Test adds France (259,452 S1s), absent from training. Names have legal-form and abbreviation changes, typos, domains, accents, and Indic scripts. Addresses have reordered or missing parts; about 2.3–3.7% of noisy-source addresses are blank. We read TSV fields as strings with tabs and quoting disabled and preserve empty-match S1s. The documented pipeline uses the supplied data, not external business databases, APIs, or geocoders.
 
-On 764,025 held-out true pairs, casefolded raw names agree exactly in 10.75%
-of cases; the later `name_core` normalization agrees in 35.88%. But on a
-fixed top-50 candidate pool, name-core re-ranking slightly *reduces* US
-top-10 positive-query hit (98.31% to 97.98%). It is therefore not safe to
-replace all raw-name evidence with cleaned names. No true US/India pair has
-a reliable extracted postcode on **both** sides, so postcode equality cannot
-be a mandatory blocker. These are normalization diagnostics, **not** upload
-#1 model scores.
+On 764,025 held-out true pairs, casefolded raw-name equality is 10.75% versus 35.88% for the later normalized `name_core`. That field is **not** a universal replacement: fixed-pool top-10 positive-query hit decreases on US from 98.31% to 97.98% when ranking on core alone. The pipeline therefore keeps multiple name/address signals. No true US/India pair has a reliable extracted postcode on **both** sides, so postcode equality cannot be required for retrieval. These are normalization diagnostics, not leaderboard scores.
 
 ### 2.2 Solution strategy
 
-**Approach:** per-country retrieval → pair features and ML scoring → short
-candidate list → thresholded matches. Country selects a search partition,
-not a one-hot model feature; unseen labels, including France, must remain
-processable. The shared validation split is `crc32(s1_id) % 10 == 0`, with
-the full same-country training S2/S3 pool searchable for validation S1s.
-The matching objective is macro per-S1 F0.5, including S1s with no match.
+We partition retrieval by the input country string while accepting unseen labels; country is not a one-hot feature. The shared validation rule is `crc32(s1_id) % 10 == 0`. Every validation S1 searches the **full same-country** training S2/S3 pool. The objective is per-S1 macro F0.5, including true singletons, for which predicting an empty list earns 1.0.
 
 ## 3. Candidate generation and blocking
 
-Upload #1 fits a character four-gram TF-IDF index over cleaned candidate
-names and a word one/two-gram TF-IDF index over candidate addresses **within
-each country**. Each retrieves up to 30 neighbors per S1; their union is the
-wide, internal stage (about 58 pairs/S1 in a later like-for-like diagnostic).
-LightGBM scores those pairs, then the highest-probability **eight** per S1
-are retained as the reported final candidate list. The upload log records
-**8.00 candidates/S1** on test. The code comment records a small validation
-oracle change between top eight and top ten (0.9792 versus 0.9795), the
-reason for preferring the smaller list; the exact trade-off run and its
-denominator were not preserved in the submission log.
+**Uploaded v1 cascade:** normalized text → wide stage 1 → pair features → LightGBM pruner → **final candidates** (`candidate_pairs.tsv`) → separate LightGBM matcher on exactly those candidates. The wide stage is the union of name character-four-gram TF-IDF top 30 and address word-one/two-gram TF-IDF top 30 in each country's pool (57.6 pairs/S1 on validation). Names use Mahatva's `name_core`/Devanagari `name_latin` and Ojaswi's additional Indic romanization, text cleaning, and consonant skeletons. Ojaswi's separate multi-block stage 1 is **not** in upload #2.
 
-The following table is a **separate Phase 12 US-only-model diagnostic**, not
-upload #1 or the new Ojaswi blocker. It uses the same retrieval/top-eight
-recipe on every held-out US/India S1 against the full same-country pools.
-Pair recall is the fraction of all true pairs retained; oracle F0.5 assumes
-perfect decisions within those candidates.
+Two LightGBM pruners trained on separate halves of the fit sample produce averaged probabilities. The uploaded cutoff retains the highest **eight** per S1 whose pruner probability is at least **0.003**. It gives 4.73 final candidates/S1 on validation. The pruner is distinct from the final matcher, resolving upload #1's problem of using its matching model to score the wider pool before writing only top eight.
 
-| Country / stage | Mean candidates/S1 | True-pair recall | Oracle macro F0.5 |
+| Uploaded v1 validation stage/cutoff | Avg candidates/S1 | True-pair recall | Oracle macro F0.5 |
 | --- | ---: | ---: | ---: |
-| US, wide stage 1 | 57.52 | 95.25% | 0.9828 |
-| US, final top 8 | 8.00 | 95.08% | 0.9825 |
-| India, wide stage 1 | 57.99 | 93.42% | 0.9752 |
-| India, final top 8 | 8.00 | 90.08% | 0.9644 |
+| Wide stage 1, unpruned | 57.6 | 0.9541 | 0.9833 |
+| Top 10 by pruner | up to 10 | not logged | 0.9832 |
+| Top 8 by pruner | up to 8 | not logged | 0.9832 |
+| Top 6 by pruner | up to 6 | not logged | 0.9815 |
+| Top 8 and probability ≥ 0.003, **uploaded** | **4.73** | **0.9527** | **0.9830** |
 
-The currently uploaded code caps test candidates at eight, so its maximum is
-at most eight. The **measured** test median, exact maximum, reduction ratio,
-and a full cutoff trade-off table for the final package have not yet been
-provided; they must be checked on the actual final candidate file. On main,
-Ojaswi has also added experimental word, consonant-skeleton, and missing-
-address blocks (`src/blocking/stage1.py`). The team tracker records a
-**20,000-validation-S1 sample per country** for their union: 94.5% India
-true-pair recall at 38.5 candidates/S1 and 98.4% US recall at 35.4
-candidates/S1. These are stage-1 sample figures, not full-validation oracle,
-final-pruner, or uploaded-model measurements. No integration into upload #1
-is claimed.
+The uploaded cutoff loses only 0.0003 oracle F0.5 versus the wide stage while shrinking the list about 12-fold. On test, upload #2 reported **5.45 candidates/S1** overall (India 5.25, US 5.29, France 6.48). Its final test median, maximum, zero-candidate S1 count, total pairs, and country-weighted reduction ratio still need to be measured from the **exact final candidate file**, not inferred from validation or another run.
 
-**Submission-audit check:** upload #1 applies LightGBM to the wide pool to
-select the top eight, while the submitted `candidate_pairs.tsv` contains
-only those eight. The organizer's updated wording asks for the exact set
-the final model scores. The team has been asked to confirm or adjust this
-interpretation before the final package; we do not claim it is resolved.
+**Parallel, not-yet-uploaded blocking experiment (Ojaswi):** a word + consonant-skeleton + missing-address three-block union, followed by a separate pruner. Ojaswi reported this full-validation trade-off over all 220,907 S1s; the chosen point is provisional until the team compares it with Arihant's uploaded pruner. The four-block `namenum` addition is in code but has no final full-validation table yet.
+
+| Ojaswi three-block alternative | Avg candidates/S1 | Pair recall | Oracle F0.5 |
+| --- | ---: | ---: | ---: |
+| Wide stage 1 | 36.7 | 0.968 | 0.9886 |
+| Top 1 + p ≥ 0.05, max 8 | 4.2 | 0.955 | 0.9847 |
+| Top 1 + p ≥ 0.02, max 8 | 4.9 | 0.961 | 0.9866 |
+| Top 1 + p ≥ 0.01, max 10 | 5.6 | 0.964 | 0.9875 |
+| **Top 1 + p ≥ 0.005, max 12 (provisional)** | **6.3** | **0.966** | **0.9880** |
+
+That provisional point preserves all but 0.0006 of the wide-stage oracle while reducing candidates about six-fold. These are Ojaswi's reported validation figures, **not** the metrics of upload #2 or the frozen final package.
 
 ## 4. Matching model
 
-Upload #1 uses LightGBM binary classification on **22** pair features:
-name/address TF-IDF cosine and retrieval ranks; RapidFuzz name token-set,
-full, and partial ratios; address token-set/full ratios; shared address
-number Jaccard, number counts, house-number/PIN equality; candidate script,
-missing-address and S3 indicators; name lengths; and candidate count. The
-model is fitted on 40,000 **non-validation** S1s per training country;
-validation labels select early stopping and the final thresholds. A pair
-is returned when probability is at least **0.65**, or the rank-one pair
-alone when its probability is at least **0.55**. Thus empty predictions are
-possible and important for true singletons.
+Upload #2 uses 160,000 **non-validation** training S1s (80,000 per country), yielding 9.2 million wide-stage pairs and 528,798 positives. Its pruner has 40 pair features: TF-IDF similarities/ranks, RapidFuzz name/address scores, shared numbers, tolerant house-number comparisons, name-token differences, script/missing-address/source flags, and related text similarities. The final LightGBM matcher adds **19 per-S1 relative features** computed only within the pruned candidate set, such as pruner-rank gaps and candidate-to-candidate similarity. It is trained on out-of-fold pruner candidates to match validation/test conditions. There is no country one-hot feature. The final decision uses probability **≥0.75**, or the best candidate alone when **≥0.60** and none pass the first threshold; both were selected on validation.
 
-Mahatva's later normalization preserves raw and cleaned forms, legal suffix,
-address fields, script, and a Devanagari-to-Latin `name_latin` field. A
-separate US-only-model test gives India macro F0.5 **0.7907** originally,
-**0.8086** using only a built-in Devanagari fallback, and **0.8376** with
-the Hindi map learned from India **non-validation** matches. None of these
-is the uploaded mixed-country model score or a zero-shot result for the
-learned map. The upload #1 matcher does not yet consume `name_latin`.
+India/US transfer improved but is not solved: with one-country training, v1 scores **0.8982** when trained on US and tested on India, versus v0's ~0.789; India-to-US is **0.9164**. The Indic token maps use India **non-validation** matches, so the US-to-India result is not a pure zero-shot preprocessing test. France has no supplied match labels.
 
 ## 5. Results and error analysis
 
-| Verified result | Value | Scope |
-| --- | ---: | --- |
-| Macro F0.5 | **0.9043** | Uploaded v0, shared US/India validation |
-| US / India macro F0.5 | **0.915 / 0.889** | Same uploaded-v0 validation run |
-| Public leaderboard | **0.886** | Upload #1; private score unknown |
-| Test candidates/S1 | **8.00** | Upload #1 log; median/reduction unmeasured |
-| Test matches/S1; empty-match S1 | **3.05; 6.2%** | Upload #1 log |
+| Confirmed upload | Validation macro F0.5 | US / India validation | Public LB | Test candidates/S1 |
+| --- | ---: | ---: | ---: | ---: |
+| #1, baseline v0 | 0.9043 | 0.9148 / 0.8886 | 0.886 | 8.00 |
+| **#2, matching v1** | **0.9525** | **0.9559 / 0.9473** | **0.919** | **5.45** |
 
-Known failure mechanisms from **separate diagnostics**, not counted upload
-#1 false-positive/false-negative rates: removing a shared legal suffix can
-promote a wrong similarly named business (a precision risk); raw-name
-re-ranking can miss Indian same-entity names in Devanagari (a recall risk);
-and a true match absent from the wide stage cannot be recovered by any
-downstream matcher. The Phase 12 India top-eight pair recall on Devanagari
-true pairs is only **67.83%** before script-aware name comparison. A labeled
-sample of actual final-model false positives and negatives remains needed.
-No France F0.5 is reported because France has no provided labels.
+Upload #2 reports 3.23 matches/S1 and 6.0% empty predictions on test. The submission validator **passed with `--check-ids`**, including no match outside the candidate file. A diagnostic upload combining v1 India/US with v0 France scored **0.912**, below v1's 0.919; this suggests v1 is better on France too, but is **not** a labeled France F0.5 estimate or a final-system variant.
+
+On v1 validation, 698,762 predicted pairs include 690,144 correct and **8,618 false positives**. Of true pairs, **37,745** were retrieved but rejected by the final model, **1,071** were pruned, and **35,065** were never found by wide stage 1. Most false positives are extra links next to correct matches: same name/different address, same address/different name, or house-number near misses. Rejected true matches often have one blank address (39%) or a house number one edit away or farther (39%). Remaining wide-stage misses include other Indic-script spellings and typos with shortened addresses. These are measured v1 validation categories, not errors inferred from the public leaderboard.
 
 ## 6. Conclusion
 
-Upload #1 demonstrates a compact candidate-plus-matcher baseline, but the
-public score is lower than validation and the private score is not known.
-The next validated improvement should retain both original and normalized
-evidence, add script-aware matching, and verify the exact final candidate
-set against the organizer's updated rule. Do not infer a France score or
-final leaderboard rank from the available evidence.
+Separating wide retrieval, pruning, and final matching reduced validation candidates from 57.6 to 4.73/S1 while retaining an oracle F0.5 of 0.9830; the matched output improved substantially over v0. Before the final zip, the team must choose and freeze the winning stage-1/pruner combination, measure candidate statistics on its actual test file, and verify that code, both TSVs, and this document describe **the same run**. No private-leaderboard rank or France label score is claimed.
 
-## Appendix A. Code and reproducibility
+## Appendix A. Reproduction and package
 
-For the **confirmed historical upload**, check out commit `8d7d4c4`, install
-the pinned `requirements.txt`, point `data/raw` (or `DATA_RAW`) at the
-provided dataset, then run these commands from the repository root:
+For confirmed upload #2, with pinned `requirements.txt` and the supplied raw TSVs available under `data/raw`, run from the repository root:
 
 ```text
-python -m src.matching.baseline_v0 features
-python -m src.matching.baseline_v0 train
-python -m src.matching.baseline_v0 test
+python -m src.normalize.run --split all
+python -m src.matching.v1 features
+python -m src.matching.v1 prune
+python -m src.matching.v1 train --tag pm --p-min 0.003
+python -m src.matching.v1 test --tag pm
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-The final package must contain `output/matching_results.tsv`,
-`output/candidate_pairs.tsv`, runnable `code/business_entity_resolution/`
-(including `src/`, README, and pinned dependencies), and this filled-in
-methodology. All test S1 IDs, including France and singletons, need one row;
-matches must be a subset of valid S2/S3 candidates with no duplicates.
-The upload log states that its validator passed with ID checking, but the
-historical output files are not in this checkout. Reproduction at the
-current branch head is **not** asserted equivalent to commit `8d7d4c4`,
-because normalization has since changed. Re-run and validate the actual
-final pipeline before packaging.
-
-## Appendix B. Evidence and final-package reconciliation
-
-`docs/eda_notes.md`, `docs/phase09_validation.md`,
-`docs/phase10_transliteration.md`, `docs/phase11_france.md`, and
-`docs/phase12_generalization.md` contain the diagnostic denominators and
-methods. Before calling this the **final** submission document, replace
-upload #1 results if a later model is chosen; verify the final output files,
-chosen cutoff and full blocker trade-off, candidate median/maximum/reduction,
-actual model error sample, exact runnable commands, and candidate-file rule.
-These are evidence gates, not assumed results.
+The final package must include the validated `output/matching_results.tsv` and `output/candidate_pairs.tsv`, runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1, including France and true singletons, needs exactly one output row; matches must be valid S2/S3 IDs contained in that S1's final candidate list. The latest logs and methods are in `docs/matching_v1.md`, `docs/submission_log.md`, and Mahatva's phase reports. If a later upload or Ojaswi's alternative blocker wins, **replace the commands and every affected number above before packaging**.

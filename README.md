@@ -221,30 +221,30 @@ See `docs/phase12_generalization.md` for exact denominators, retrieval
 recalls/oracle ceilings, limitations, and the handoff to matching/blocking
 owners. This diagnostic has not replaced the team's submitted model.
 
-## Confirmed upload #1 and final package
+## Confirmed upload #2 and final package
 
-The most recent **confirmed uploaded** solution in `docs/submission_log.md`
-is baseline v0 at commit `8d7d4c4` (validation macro F0.5 0.9043, public
-leaderboard 0.886). To reproduce that historical version from the supplied
-raw TSVs, check out that commit, install its pinned dependencies, set up
-`data/raw` as above, and run:
+The latest **confirmed uploaded** solution in `docs/submission_log.md` is
+matching v1 (validation macro F0.5 0.9525, public leaderboard 0.919).
+With pinned dependencies installed and `data/raw` set up as above, its
+documented raw-data-to-output commands are:
 
 ```powershell
-python -m src.matching.baseline_v0 features
-python -m src.matching.baseline_v0 train
-python -m src.matching.baseline_v0 test
+python -m src.normalize.run --split all
+python -m src.matching.v1 features
+python -m src.matching.v1 prune
+python -m src.matching.v1 train --tag pm --p-min 0.003
+python -m src.matching.v1 test --tag pm
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-The same commands at the current branch head can generate a **fresh** run,
-but normalization changed after the upload; do not claim it reproduces the
-0.886 leaderboard file without verifying the outputs. The methodology in
-`Documentation_template.md` describes the confirmed upload and identifies
-the measurements still required for the actual final package. That package
-must include both validated output TSVs, self-contained code and pinned
-dependencies, and a methodology reconciled to the **same final code and
-outputs**. The candidate list also needs confirmation against the organizer's
-latest exact-set instruction before freezing the package.
+The v1 cascade is wide retrieval → LightGBM pruner → final candidate list
+(`candidate_pairs.tsv`) → separate final LightGBM matcher, which scores
+exactly that list. `docs/matching_v1.md` has the measured features, cutoff,
+validation, error analysis, and transfer checks. The methodology in
+`Documentation_template.md` describes upload #2 and distinguishes Ojaswi's
+not-yet-uploaded multi-block alternative. If a later model/blocker wins,
+replace these commands and verify the **exact final** outputs, candidate
+statistics, and document before creating the submission zip.
 
 ## Team ownership
 
