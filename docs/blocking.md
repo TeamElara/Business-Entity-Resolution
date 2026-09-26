@@ -14,6 +14,8 @@ would reach with the candidate set (precision 1, recall = candidates ∩ truth /
 S2+S3 ┘                               ├─ skel      : TF-IDF on skeleton text         top 20  │
                                       ├─ noaddr    : name skeleton vs pool w/o addr  top 10  ├─ stage 1 (wide, internal)
                                       ├─ namenum   : name + address numbers          top 10  │
+                                      ├─ concat    : joined name (char 3-grams) vs
+                                      │              domain-like pool names           top 5   │
                                       └─ (matching: name char-4gram, address 1-2gram)       ─┘
                                                            │
                               pruner (src/matching) → final candidate set = candidate_pairs.tsv
@@ -57,27 +59,38 @@ and house number but a long S1 address that dilutes the cosine. `namenum` (name 
 of the address) recovers 2.2 points of India recall. Postcodes are rarely present in the raw
 addresses, so a postcode block was dropped.
 
+Third round (both countries, after four blocks): 16.9k true pairs (2.2%) still missing. 35% of them
+have a candidate name that is one concatenated token (`nikolettamoorerhomes.com` for "Nikoletta
+Moorer Homes", `truexchurch.com` for "Truex and Church LLC"), which no word block can match.
+`concat` drops legal and filler words (English, Indian and French forms: pvt, ltd, llc, sarl, sas,
+and, et, de, …) and spaces from the name and compares character 3-grams against only the pool records
+whose name is a single token of 8+ characters (4% of India's pool, 5% of the US pool), so it costs
+seconds. Initials as names ("AM" for "Arjun Mechanical") account for only 38 misses and were left out.
+
 ## Results (full val)
 
 | stage 1 variant | cands / S1 | pair recall | oracle ceiling | US recall | India recall |
 |---|---|---|---|---|---|
 | word block only, top 20 (v0) | 20.0 | 0.937 | 0.977 | 0.966 | 0.895 |
 | word + skel + noaddr | 36.7 | 0.968 | 0.989 | 0.984 | 0.944 |
-| **word + skel + noaddr + namenum** | **41.5** (p95 51, max 60) | **0.978** | **0.993** | **0.986** | **0.966** |
+| word + skel + noaddr + namenum | 41.5 | 0.978 | 0.993 | 0.986 | 0.966 |
+| **all five blocks (+ concat)** | **46.4** (p95 56, max 65) | **0.983** | **0.9945** | **0.990** | **0.972** |
 
-By country (4 blocks): US 39.7 cands/S1, recall 0.986, oracle 0.996; India 44.3 cands/S1, recall
-0.966, oracle 0.989. By source: S2 recall 0.981, S3 0.975. No val S1 is left without candidates.
+By country (5 blocks): US 44.5 cands/S1, recall 0.990, oracle 0.997; India 49.1 cands/S1, recall
+0.972, oracle 0.991. By source: S2 recall 0.985, S3 0.981. No val S1 is left without candidates.
+Recall is flat across the number of true matches (0.981 to 0.985).
 
-What each block contributes (4-block union, full val):
+What each block contributes (5-block union, full val):
 
 | block | pairs / S1 | recall alone | true pairs found only by this block |
 |---|---|---|---|
-| word | 20 | 0.954 | 1.29% |
-| namenum | 10 | 0.824 | 0.99% |
+| word | 20 | 0.954 | 0.98% |
+| namenum | 10 | 0.824 | 0.97% |
+| concat | 5 | 0.044 | 0.49% |
 | noaddr | 10 | 0.039 | 0.38% |
-| skel | 20 | 0.929 | 0.35% |
+| skel | 20 | 0.929 | 0.26% |
 
-Runtime (8 GB laptop, 8 threads): stage 1 on all 221k val S1 against the full pools in 26 min,
+Runtime (8 GB laptop, 8 threads): stage 1 (5 blocks) on all 221k val S1 against the full pools in 19 min,
 peak RAM 2.4 GB (the TF-IDF fit is per country; S1 queries are scored in chunks).
 
 ## Pruner experiment (not in the final pipeline)
