@@ -1,5 +1,8 @@
 # Normalization EDA Notes
 
+For the full Phase 6–8 address fill rates and Parquet run audit, see
+`docs/normalization_report.md`.
+
 Generated on 25 Sep 2026 from the provided challenge inputs only. No external data or lookup service was
 used.
 
@@ -83,6 +86,34 @@ India is harder than the US in this sample: mean cleaned-name token Jaccard is 0
   generic rather than learned from test outcomes.
 
 ## Normalization implications
+
+### Phase 4 refinement and Phase 5 checkpoint
+
+After syncing Arihant's shared code from `main`, Phase 4 now reassembles
+dotted legal acronyms such as `L.L.C.` into whole tokens. Phase 5 extracts
+trailing legal forms into `legal_suffix` and leaves a stripped `name_core`.
+The full original and normalized names remain available. The 45 normalization
+tests pass.
+
+On 10,000 deterministically sampled *training* true pairs, exact full-name
+agreement was 2,475/10,000 (24.75%) before dotted-form handling,
+2,556/10,000 (25.56%) after it, and 3,639/10,000 (36.39%) for `name_core`.
+Legal forms were detected on 6,265 sampled S1 sides and 3,391 candidate sides.
+This sample is descriptive; it is not the CRC32 held-out validation or a
+top-5/top-10 blocking test.
+
+Full S1 file checks: legal forms detected on 726,884/883,188 India training
+records, 658,854/1,323,633 US training records, and 174,575/259,452
+France test records. No non-empty normalized S1 name became an empty core.
+Each country partition loaded and normalized in about 0.4-1.1 seconds on
+this machine, excluding writing Parquet output.
+
+Suffix removal increases core-name collisions. For example, among India S1
+training records, 405,079 have a `name_norm` shared by another S1 but 464,307
+share a `name_core`. In the US those counts are 477,385 and 572,631; in the
+France S1 test input they are 88,375 and 121,980. Blocking and matching should
+therefore retain the full name, legal form, and address signals; a matching
+core alone does not establish business identity.
 
 ### Phase 4 implementation checkpoint
 
