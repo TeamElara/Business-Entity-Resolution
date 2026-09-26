@@ -128,3 +128,20 @@ as US/India, so `concat` and `noaddr` apply there too. French legal forms (SARL,
 legal and filler words (sarl, sas, sa, eurl, sci, snc, et, de, la, le, les, des, du).
 
 To also score the S1 of a split without labels: `python -m src.blocking.stage1 --split test`.
+
+## Raw text vs. the normalized files
+
+The blocks read the raw TSVs and apply `text.py`. We also ran the same five blocks on Mahatva's
+normalized columns (`name_latin`, else `name_norm`; `addr_norm`), with the same `text.py` steps on
+top, for 20,000 val S1 per country:
+
+| input | India recall | US recall | cands / S1 |
+|---|---|---|---|
+| **raw + text.py (used)** | **0.9732** | **0.9898** | 49.1 / 44.5 |
+| normalized + text.py | 0.9683 | 0.9861 | 49.2 / 44.5 |
+| union of both | 0.9744 | 0.9905 | 56.0 / 52.2 |
+
+The largest drop is in `concat` (India alone 0.044 → 0.008): the normalized names change legal words
+and spacing, so joined names no longer equal the domain-like candidate names. The union adds only
+0.1 point for 7–8 more candidates per S1, so the blocks stay on raw text. The normalized columns
+are used by the matching features instead.
