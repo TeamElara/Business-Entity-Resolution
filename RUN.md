@@ -56,21 +56,23 @@ explicit `rescore` command uses that cache to produce the provisional
 `t=0.85`, `t1=0.5` files. The final matcher scores only the pruned top-six,
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
-Earlier fresh-clone dry run on Windows / Python 3.13 (`main` at `dc87f81`, 26 Sep):
-the pinned dependency install succeeded; `src.common.selftest` passed; all
-six normalization Parquets were generated from the supplied raw data. The
-three test-file row counts, per-country statistics and 150-token Hindi map
-match Mahatva's existing `normalization_report.json`. `pytest` initially had
-**one failure** because a test required the gitignored Hindi map before it
-was generated; after normalization, 86 tests passed. PR #3 makes that test
-self-contained. A fresh Windows clone of the current PR branch at `8bdb455`
-installed `requirements.txt` into a new virtual environment; 87 tests and
-`src.common.selftest` passed, and the v3, reverse-search and orphan `--help`
-checks all returned successfully. `python -m src.matching.v2 --help` on the
-earlier clean `main` failed with
-`ModuleNotFoundError: resource` on Windows; PR #3 also fixes that import and
-passes its smoke test. The full v3 commands above still require a **new
-clean-clone run on final main**; merge/retest these fixes before packaging.
+Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
+succeeded. On current `main` at `00c5bc7` with Python 3.12.14, the no-data
+toy self-test passed. Before normalization, `pytest` reported 85 passed and
+one Hindi-map test failure because that test expects a gitignored trained map.
+The raw-data `src.normalize.run --split all` command then succeeded and wrote
+all six files: train S1/S2/S3 = 2,206,821 / 5,034,616 / 5,285,603 rows;
+test S1/S2/S3 = 1,732,544 / 4,887,273 / 5,082,316 rows, with 150 learned
+Hindi tokens. The three test row counts match the earlier independent dry
+run. On this unpatched `main`, the v3, reverse-search and orphan `--help`
+commands fail on Windows with `ModuleNotFoundError: resource`.
+
+PR #3 makes the Hindi-map test self-contained and guards the Unix-only
+`resource` import. Its code, tested against the same pinned dependency set,
+passed 87 tests and `src.common.selftest`; the v3, reverse-search and orphan
+`--help` commands all succeeded. The full v3 training/test sequence above
+still requires a **new clean-clone run on final main** after merge and model
+freeze; do not claim the current smoke check reproduces the final TSVs.
 
 The full raw-to-output v3 training/test sequence is **not yet verified** on
 this fresh clone. Model training/test is owned by Arihant; copy only the
