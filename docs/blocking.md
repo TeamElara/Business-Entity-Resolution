@@ -109,3 +109,22 @@ three-block stage 1 (val):
 
 The team kept one pruner (the matching pruner) so that the final model is trained on the same kind
 of candidate sets it scores.
+
+## France (unseen country, no labels)
+
+The blocks contain no country-specific rule; France goes through the same code. As a label-free
+check, 5,000 random S1 per country were run through all five blocks and we counted "strong"
+candidates (name token-set similarity ≥ 90 and address similarity ≥ 70):
+
+| | cands / S1 | S1 with ≥ 1 strong candidate | strong candidates / S1 |
+|---|---|---|---|
+| US (val) | 44.4 | 96.9% | 3.2 |
+| India (val) | 49.1 | 95.6% | 3.0 |
+| France (test) | 49.1 | 97.4% | 3.8 |
+
+France pools have a similar share of domain-like names (4.9%) and records without an address (3.0%)
+as US/India, so `concat` and `noaddr` apply there too. French legal forms (SARL, SAS, EURL) and the
+`rue`/`r` abbreviation are frequent tokens that TF-IDF down-weights anyway; `concat` drops French
+legal and filler words (sarl, sas, sa, eurl, sci, snc, et, de, la, le, les, des, du).
+
+To also score the S1 of a split without labels: `python -m src.blocking.stage1 --split test`.
