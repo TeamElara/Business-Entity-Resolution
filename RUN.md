@@ -52,9 +52,11 @@ three test-file row counts, per-country statistics and 150-token Hindi map
 match Mahatva's existing `normalization_report.json`. `pytest` initially had
 **one failure** because a test required the gitignored Hindi map before it
 was generated; after normalization, 86 tests passed. PR #3 makes that test
-self-contained. On the current PR branch, 87 tests and `src.common.selftest`
-pass on Windows, and the v3, reverse-search and orphan `--help` checks all
-return successfully. `python -m src.matching.v2 --help` on clean `main` fails with
+self-contained. A fresh Windows clone of the current PR branch at `8bdb455`
+installed `requirements.txt` into a new virtual environment; 87 tests and
+`src.common.selftest` passed, and the v3, reverse-search and orphan `--help`
+checks all returned successfully. `python -m src.matching.v2 --help` on the
+earlier clean `main` failed with
 `ModuleNotFoundError: resource` on Windows; PR #3 also fixes that import and
 passes its smoke test. The full v3 commands above still require a **new
 clean-clone run on final main**; merge/retest these fixes before packaging.
