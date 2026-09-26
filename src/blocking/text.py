@@ -24,7 +24,8 @@ import polars as pl
 from src.common.io import REPO_ROOT, load_ground_truth, scan_source, truth_pairs
 from src.common.split import add_is_val
 
-MAP_PATH = REPO_ROOT / "data" / "cand" / "script_token_map.json"
+# v2: learned after zero-width joiners are removed in clean_expr (older cached maps are stale)
+MAP_PATH = REPO_ROOT / "data" / "cand" / "script_token_map_v2.json"
 NON_LATIN = r"[\p{L}&&\P{Latin}]"
 
 # ------------------------------------------------------------------ basic cleaning
@@ -36,6 +37,8 @@ def clean_expr(col: pl.Expr) -> pl.Expr:
     """Vectorised cleaning shared by names and addresses (see module docstring)."""
     s = (
         col.fill_null("")
+        # zero-width joiners inside Indic words ("ఎస్\u200cఎస్") must not split the word
+        .str.replace_all(r"[\u200b-\u200d\u2060\ufeff\u00ad]", "")
         .str.to_lowercase()
         .str.replace_all(r"https?://|www\.", " ")
         .str.replace_all(r"\.(com|net|org|in|co|biz|info|us|fr)\b", " ")
