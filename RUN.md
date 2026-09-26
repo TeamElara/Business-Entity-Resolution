@@ -5,6 +5,8 @@ candidate as of 26 September 2026. `extra` is a reproducible local model tag;
 replace it with the exact selected tag at the final freeze. Public leaderboard
 score and final pick are pending. Do not package until the exact final test
 files pass the validator and match the leaderboard upload.
+The reported validation 0.9739 uses `t=0.75`, `t1=0.55`, and the same
+one-record-to-one-S1 decision rule as test.
 
 ## 1. Inputs and environment
 

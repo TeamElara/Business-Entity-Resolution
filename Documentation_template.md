@@ -2,7 +2,7 @@
 
 **Team:** Team Elara (Mahatva Goel, Arihant, Ojaswi)
 
-**Status (26 September 2026):** v3 with orphan and reverse-search features is the current candidate. Final code tag, test outputs, validator result, and v3 leaderboard score are pending. Reconcile this draft to the exact selected files before packaging.
+**Status (26 September 2026):** v3 with orphan and reverse-search features is the current validation candidate. Final code tag, test outputs, validator result, and v3 leaderboard score are pending. Reconcile this draft to the exact selected files before packaging.
 
 ## 1. Executive summary
 
@@ -53,11 +53,12 @@ The earlier v1 model improved US-only → India transfer from v0's ~0.789 to **0
 | Upload #2, v1 | 0.9525 | 0.9559 / 0.9473 | **0.919** | 5.45 |
 | V2, top six | 0.9689 | 0.9722 / 0.9640 | **0.924 reported** (`t=0.85`) | pending |
 | V3 base, top six | 0.9709 | pending | pending | pending |
+| V3 + orphan, top six | 0.9731 | pending | pending | pending |
 | **V3 + orphan/reverse, top six** | **0.9739 reported** | **0.9759 / 0.9709 reported** | **pending** | **pending** |
 
 Upload #2 passed `validate_submission.py --check-ids` with no match outside the candidate list. That check must be repeated on the **exact v3 final files**. A diagnostic hybrid using v1 India/US and v0 France scored **0.912**, below v1's 0.919; this suggests v1 also improved France, but is **not** a labeled France F0.5 estimate. The reported v3 validation numbers and v2 public score came from team updates; final-run artifacts and a public v3 upload still need reconciliation.
 
-Real v1 validation error analysis (not v3): **8,618 false positives**, **37,745** true matches retrieved but rejected by the final model, **1,071** cut by the pruner, and **35,065** absent from stage 1. Frequent false positives are a similar name at a different address or another business at the same address; rejected true matches often have a blank address or a slightly different house number. V2's wider stage reduced missing true pairs to **11,844** before pruning. V3 false-positive/false-negative analysis and the France manual review are pending incorporation. No private score or France label score is claimed.
+Real v1 validation error analysis (not v3): **8,618 false positives**, **37,745** true matches retrieved but rejected by the final model, **1,071** cut by the pruner, and **35,065** absent from stage 1. Frequent false positives are a similar name at a different address or another business at the same address; rejected true matches often have a blank address or a slightly different house number. V2's wider stage reduced missing true pairs to **11,844** before pruning. In a preliminary manual review of v1 France predictions for S1 #101–200, Mahatva marked 242 predicted pairs `ok` and 40 `wrong`, with 18 predicted pairs unresolved and one possible missed pair left unconfirmed. Of the 40 wrong predictions, 23 had a different distinctive name/location and 16 had a different house number despite overlapping names/streets. Arihant's separate review of #1–100 found 255 `ok`, 28 `wrong`, and 3 missed. These are manual diagnostics, not a labeled France F0.5 estimate; v3 error analysis remains pending. No private score is claimed.
 
 ## 6. Conclusion
 
@@ -79,4 +80,4 @@ python -m src.matching.v3 test --tag extra --t 0.75 --t1 0.55
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$DATA_RAW/test" --check-ids
 ```
 
-`extra` is a local tag, **not yet the frozen final tag**. The reported validation score may be before the test-only exclusivity decision; a directly comparable post-exclusivity validation check is pending. The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` preserve prior measurements. If a later pipeline wins, **replace all affected commands and figures before packaging**.
+`extra` is a local tag, **not yet the frozen final tag**. Arihant confirmed that the reported 0.9739 validation score uses the same decision rules as test: `t=0.75`, `t1=0.55`, with one S2/S3 record assigned to at most one S1. The final zip requires both validated output TSVs, self-contained runnable code and pinned dependencies under `code/business_entity_resolution/`, and this methodology. Every test S1—including France and empty-match entities—must have one output row, with valid, non-duplicated S2/S3 IDs and matches contained in candidates. `docs/matching_v2.md`, `docs/blocking.md`, and `docs/submission_log.md` preserve prior measurements. If a later pipeline wins, **replace all affected commands and figures before packaging**.

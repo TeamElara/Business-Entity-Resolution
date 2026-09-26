@@ -264,8 +264,10 @@ at most six candidates per S1 with probability at least 0.003 (reported
 validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
 per-S1, orphan-probability and reverse-search features. Reported v3 validation
 macro F0.5 is **0.9739** (India 0.9709, US 0.9759), versus v3 base 0.9709
-and v2 0.9689. These are **validation**, not public/private leaderboard
-scores. With pinned dependencies installed and `data/raw` set up as above,
+and v3 + orphan 0.9731; v2 scored 0.9689. The 0.9739 validation score uses the
+same `t=0.75`, `t1=0.55`, and one-record-to-one-S1 decision rule as test.
+These are **validation**, not public/private leaderboard scores. With pinned
+dependencies installed and `data/raw` set up as above,
 the draft v3 raw-data-to-output commands are:
 
 ```powershell
