@@ -6,6 +6,8 @@ Blocks, all fitted on the S2+S3 pool of one country and queried with that countr
 - skel:   the same text as consonant skeletons (absorbs typos and romanization differences).
 - noaddr: name skeleton against only the pool records without an address, which the two
           blocks above rank poorly.
+- namenum: name + the numbers of the address only. A long S1 address dilutes the word block;
+          same name + same house number is found here (India val: +2.2 pts stage-1 recall).
 
 Countries come from the S1 file, never from a fixed list. Outputs (gitignored):
 - data/cand/stage1_{split}.parquet: s1_id, cand_id, s_word, r_word, s_skel, r_skel, s_noaddr, r_noaddr
@@ -35,13 +37,14 @@ BLOCKS = {  # name: (text column, pool filter column or None, top-k, max_df)
     "word": ("text", None, 20, 0.01),
     "skel": ("skel", None, 20, 0.01),
     "noaddr": ("skel_name", "addr_empty", 10, 0.05),
+    "namenum": ("namenum", None, 10, 0.05),
 }
 
 
 def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     """Prepared text for one source file and one country.
 
-    Columns: entity_id, name, addr, text, skel, skel_name, addr_empty, nonlatin.
+    Columns: entity_id, name, addr, text, skel, skel_name, namenum, addr_empty, nonlatin.
     """
     d = (
         scan_source(split, source, country=country, columns=["entity_id", "business_name", "business_address"])
@@ -57,8 +60,24 @@ def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     d = d.with_columns(
         (pl.col("name") + " " + pl.col("addr")).str.strip_chars().alias("text"),
         (pl.col("addr") == "").alias("addr_empty"),
+        (pl.col("name") + " " + pl.col("addr").str.extract_all(r"\d+").list.join(" ")).str.strip_chars().alias("namenum"),
     )
     return d.with_columns(skel=skeletonize(d["text"]), skel_name=skeletonize(d["name"]))
+
+
+def fit_tfidf(texts: list[str], max_df: float):
+    """Word TF-IDF fitted on pool texts -> (vectorizer, transposed pool matrix).
+
+    Falls back to keeping every token when max_df/min_df would leave none (tiny pools).
+    """
+    for mn, mx in ((min(2, len(texts)), max_df if len(texts) > 100 else 1.0), (1, 1.0)):
+        vec = TfidfVectorizer(analyzer="word", token_pattern=r"\S+", min_df=mn, max_df=mx,
+                              sublinear_tf=True, dtype=np.float32)
+        try:
+            return vec, vec.fit_transform(texts).T.tocsr()
+        except ValueError:
+            continue
+    raise ValueError("no tokens in pool texts")
 
 
 def topk_block(q: pl.DataFrame, p: pl.DataFrame, col: str, k: int, max_df: float,
@@ -67,9 +86,7 @@ def topk_block(q: pl.DataFrame, p: pl.DataFrame, col: str, k: int, max_df: float
     if q.height == 0 or p.height == 0:
         return pl.DataFrame(schema={"s1_id": pl.String, "cand_id": pl.String,
                                     "score": pl.Float32, "rank": pl.UInt32})
-    vec = TfidfVectorizer(analyzer="word", token_pattern=r"\S+", min_df=min(2, p.height),
-                          max_df=max_df if p.height > 100 else 1.0, sublinear_tf=True, dtype=np.float32)
-    PT = vec.fit_transform(p[col].to_list()).T.tocsr()
+    vec, PT = fit_tfidf(p[col].to_list(), max_df)
     Q = vec.transform(q[col].to_list())
     qi, pi, sc = [], [], []
     for start in range(0, Q.shape[0], chunk):
@@ -126,7 +143,7 @@ def main() -> None:
         t1 = time.time()
         pr, q, p = run_country(args.split, country, tmap, s1_filter, args.chunk, args.threads)
         pairs.append(pr)
-        preps.append(pl.concat([q, p]).drop("text", "skel"))
+        preps.append(pl.concat([q, p]).drop("text", "skel", "namenum"))
         print(f"[{country}] S1 {q.height:,} x pool {p.height:,} -> {pr.height:,} pairs "
               f"({pr.height / max(q.height, 1):.1f}/S1) in {time.time() - t1:.0f}s, peak RAM {peak_ram_gb():.1f} GB",
               flush=True)

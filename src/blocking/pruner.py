@@ -22,6 +22,7 @@ import polars as pl
 from src.common.io import REPO_ROOT, load_ground_truth, truth_pairs
 from src.common.split import is_val
 from .features import FEATURES, add_features
+from .stage1 import BLOCKS
 
 CAND_DIR = REPO_ROOT / "data" / "cand"
 MODEL_PATH = CAND_DIR / "pruner_lgb.txt"
@@ -133,7 +134,7 @@ def cmd_apply(args) -> None:
         scored = f.select(
             "s1_id", "cand_id",
             pl.concat_str(
-                [pl.when(pl.col(f"s_{b}").is_not_null()).then(pl.lit(b)) for b in ("word", "skel", "noaddr")],
+                [pl.when(pl.col(f"s_{b}").is_not_null()).then(pl.lit(b)) for b in BLOCKS],
                 separator="|", ignore_nulls=True).alias("sources"),
         ).with_columns(prob=pl.Series(prob, dtype=pl.Float32))
         parts.append(apply_cutoff(scored, cut["min_keep"], cut["min_prob"], cut["rel"], cut["k_max"]))

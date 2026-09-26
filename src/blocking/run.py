@@ -22,7 +22,6 @@ import time
 
 import numpy as np
 import polars as pl
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sparse_dot_topn import sp_matmul_topn  # before lightgbm: OpenMP clash hangs on macOS otherwise
 
 import lightgbm as lgb
@@ -32,7 +31,7 @@ from src.common.metrics import blocking_report
 from src.common.split import is_val
 from .features import FEATURES, add_features
 from .pruner import CUTOFF_PATH, MODEL_PATH, apply_cutoff
-from .stage1 import BLOCKS, CAND_DIR, prepare
+from .stage1 import BLOCKS, CAND_DIR, fit_tfidf, prepare
 from .text import load_script_map
 from .tfidf_v0 import list_countries, peak_ram_gb
 
@@ -44,9 +43,7 @@ def fit_blocks(p: pl.DataFrame) -> dict:
         pp = p if flt is None else p.filter(pl.col(flt))
         if pp.height == 0:
             continue
-        vec = TfidfVectorizer(analyzer="word", token_pattern=r"\S+", min_df=min(2, pp.height),
-                              max_df=max_df if pp.height > 100 else 1.0, sublinear_tf=True, dtype=np.float32)
-        PT = vec.fit_transform(pp[col].to_list()).T.tocsr()
+        vec, PT = fit_tfidf(pp[col].to_list(), max_df)
         fitted[name] = (vec, PT, pp["entity_id"], col, k)
     return fitted
 
