@@ -241,6 +241,8 @@ Separate all-six-Ojaswi-block validation (220,907 S1, full same-country
 pools): pair recall **0.984**, oracle F0.5 **0.9951** at 48.3 candidates/S1
 (US 0.990, India 0.976). These are Ojaswi's standalone stage-1 figures, **not**
 v3's larger union with Arihant's two matching blocks or its pruned final set.
+They were measured before the zero-width-joiner text fix included in v3;
+updated six-block figures are pending a full-validation rerun.
 
 ```bash
 # stage-1 pairs + prepared text for val S1 (writes data/cand/stage1_train_val.parquet, prep_train_val.parquet)

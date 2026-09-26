@@ -35,7 +35,7 @@ Two pruners trained on separate halves of the fit sample produce averaged probab
 
 V2 top six cost 0.0014 validation F0.5 versus top eight but retained 13% fewer candidates. Those v2 country-wise and zero-candidate statistics must not be carried over to v3. The **test** total, mean/median/maximum, zero-candidate count, country coverage and reduction ratio must be measured from the exact selected v3 output file.
 
-Ojaswi independently measured all **six of her own blocks**: 48.3 stage-1 candidates/S1, pair recall 0.984, oracle 0.9951 on full validation. This is a standalone retrieval measurement, not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
+Ojaswi independently measured all **six of her own blocks**: 48.3 stage-1 candidates/S1 (p95 59, max 70), pair recall 0.984, oracle 0.9951 on 220,907 full-validation S1s, with no S1 left without candidates. US: 46.5 candidates/S1, recall 0.990, oracle 0.997; India: 51.0, recall 0.976, oracle 0.992. S2 recall was 0.986 and S3 recall 0.983. This is a standalone retrieval measurement **before** the zero-width-joiner text fix used in the frozen v3 run; the post-fix rerun is pending. It is not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
 
 ## 4. Matching model
 
