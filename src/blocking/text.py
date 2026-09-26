@@ -19,9 +19,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import numpy as np
 import polars as pl
-import pyarrow as pa
 
 from src.common.io import REPO_ROOT, load_ground_truth, scan_source, truth_pairs
 from src.common.split import add_is_val
@@ -178,23 +176,23 @@ def map_tokens(texts: pl.Series, fn, only: str | None = None) -> pl.Series:
     """Apply `fn` to every distinct token of `texts` (space separated) and rebuild the strings.
 
     Python runs once per distinct token (optionally only on tokens matching regex `only`);
-    the tokens are replaced in one flat column and the strings rebuilt from the list offsets
-    (no join or group-by). A null string comes back as "".
+    the rebuild is vectorised through a lookup table.
     """
-    lists = texts.fill_null("").str.split(" ")
-    flat = lists.explode()
-    toks = flat.unique()
+    toks = texts.str.split(" ").explode().drop_nulls().unique()
     if only is not None:
         toks = toks.filter(toks.str.contains(only))
     toks = toks.to_list()
     if not toks:
         return texts
-    values = flat.replace(toks, [fn(t) for t in toks]).rechunk().to_arrow()
-    offsets = np.zeros(len(lists) + 1, dtype=np.int64)
-    np.cumsum(lists.list.len().to_numpy(), out=offsets[1:])
-    rebuilt = pa.LargeListArray.from_arrays(pa.array(offsets), values)
+    lut = pl.DataFrame({"tok": toks, "new": [fn(t) for t in toks]})
     return (
-        pl.Series(texts.name, rebuilt).list.join(" ")
+        pl.DataFrame({"t": texts}).with_row_index("row")
+        .with_columns(pl.col("t").str.split(" "))
+        .explode("t")
+        .join(lut, left_on="t", right_on="tok", how="left", maintain_order="left")
+        .with_columns(pl.coalesce("new", "t").alias("t"))
+        .group_by("row", maintain_order=True)
+        .agg(pl.col("t").str.join(" "))["t"]
         .str.replace_all(r"\s+", " ")
         .str.strip_chars()
     )

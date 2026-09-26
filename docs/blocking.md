@@ -161,22 +161,3 @@ The largest drop is in `concat` (India alone 0.044 → 0.008): the normalized na
 and spacing, so joined names no longer equal the domain-like candidate names. The union adds only
 0.1 point for 7–8 more candidates per S1, so the blocks stay on raw text. The normalized columns
 are used by the matching features instead.
-
-## Speed of `prepare()` and the optional cache
-
-`char_trigrams` is vectorized (polars, no Python loop) and `map_tokens` (used by `latinize` and
-`skeletonize`) rebuilds the strings from list offsets instead of a join + group-by. Outputs are
-unchanged: `python -m src.blocking.prep_bench` runs the old code (c71a977) and the new code on the
-same files and compares every column (row count, dtype, order-sensitive hash, exact equality).
-All 12 columns are identical on every test file (France, India, US; S1, S2, S3):
-
-| test | old | new | cached read |
-|---|---|---|---|
-| India (S1+S2+S3, 5.5M records) | 136 s | 85 s | 1 s |
-| US (4.5M records) | 58 s | 45 s | 1 s |
-| France (1.7M records) | 62 s | 59 s | 1 s |
-
-Set `BLOCKING_PREP_CACHE=data/cand/prep_cache` to cache `prepare()` per (split, source, country);
-later runs read the parquet back (identical frame). The cache key covers `stage1.py`, `text.py`, the
-token map and the raw file, so any change prepares again. `prepare()` is a few minutes of a ~2 h
-matching run, so this matters mostly for repeated runs.
