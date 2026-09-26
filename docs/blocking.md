@@ -16,6 +16,7 @@ S2+S3 ┘                               ├─ skel      : TF-IDF on skeleton te
                                       ├─ namenum   : name + address numbers          top 10  │
                                       ├─ concat    : joined name (char 3-grams) vs
                                       │              domain-like pool names           top 5   │
+                                      ├─ namehouse : name + whole house numbers       top 5   │
                                       └─ (matching: name char-4gram, address 1-2gram)       ─┘
                                                            │
                               pruner (src/matching) → final candidate set = candidate_pairs.tsv
@@ -67,6 +68,18 @@ and, et, de, …) and spaces from the name and compares character 3-grams agains
 whose name is a single token of 8+ characters (4% of India's pool, 5% of the US pool), so it costs
 seconds. Initials as names ("AM" for "Arjun Mechanical") account for only 38 misses and were left out.
 
+Fourth round (after five blocks, 13.1k misses): mostly generic names shared by several businesses in
+one city, where the true record ranks below other same-name records. Small address numbers ("52",
+"4") are too frequent to survive `max_df`, but the whole house number ("J-52/4", "70/1/1",
+"2-1-241/62") is rare. `namehouse` = name + whole house-number tokens taken from the raw address
+(`j_52_4`), top 5: India +0.4 points; 45% of India S1 have such numbers, 1% of US S1. Larger top-k
+on the existing blocks was also measured (word 30 / namenum 15 / noaddr 20: India +0.5, US +0.2 points
+for ~20 more candidates per S1) and not adopted.
+
+Zero-width joiners (U+200C/U+200D) inside Telugu / Kannada / Malayalam / Hindi words used to split one
+word into two ("ఎస్‌ఎస్" = SS became "es es"). `clean_expr` now removes them before tokenizing; the
+re-learned map has 1,320 tokens and covers 94.7% of non-Latin test tokens (was 91.7%).
+
 ## Results (full val)
 
 | stage 1 variant | cands / S1 | pair recall | oracle ceiling | US recall | India recall |
@@ -74,24 +87,27 @@ seconds. Initials as names ("AM" for "Arjun Mechanical") account for only 38 mis
 | word block only, top 20 (v0) | 20.0 | 0.937 | 0.977 | 0.966 | 0.895 |
 | word + skel + noaddr | 36.7 | 0.968 | 0.989 | 0.984 | 0.944 |
 | word + skel + noaddr + namenum | 41.5 | 0.978 | 0.993 | 0.986 | 0.966 |
-| **all five blocks (+ concat)** | **46.4** (p95 56, max 65) | **0.983** | **0.9945** | **0.990** | **0.972** |
+| all five blocks (+ concat) | 46.4 | 0.983 | 0.9945 | 0.990 | 0.972 |
+| **all six blocks (+ namehouse)** | **48.3** (p95 59, max 70) | **0.984** | **0.9951** | **0.990** | **0.976** |
 
-By country (5 blocks): US 44.5 cands/S1, recall 0.990, oracle 0.997; India 49.1 cands/S1, recall
-0.972, oracle 0.991. By source: S2 recall 0.985, S3 0.981. No val S1 is left without candidates.
-Recall is flat across the number of true matches (0.981 to 0.985).
+By country (6 blocks): US 46.5 cands/S1, recall 0.990, oracle 0.997; India 51.0 cands/S1, recall
+0.976, oracle 0.992. By source: S2 recall 0.986, S3 0.983. No val S1 is left without candidates.
+Recall is flat across the number of true matches (0.983 to 0.986). (Measured before the zero-width
+joiner fix, which only adds recall.)
 
-What each block contributes (5-block union, full val):
+What each block contributes (6-block union, full val):
 
-| block | pairs / S1 | recall alone | true pairs found only by this block |
-|---|---|---|---|
-| word | 20 | 0.954 | 0.98% |
-| namenum | 10 | 0.824 | 0.97% |
-| concat | 5 | 0.044 | 0.49% |
-| noaddr | 10 | 0.039 | 0.38% |
-| skel | 20 | 0.929 | 0.26% |
+| block | pairs / S1 | true pairs found only by this block |
+|---|---|---|
+| word | 20 | 0.85% |
+| namenum | 10 | 0.52% |
+| concat | 5 | 0.47% |
+| noaddr | 10 | 0.36% |
+| skel | 20 | 0.24% |
+| namehouse | 5 | 0.16% |
 
-Runtime (8 GB laptop, 8 threads): stage 1 (5 blocks) on all 221k val S1 against the full pools in 19 min,
-peak RAM 2.4 GB (the TF-IDF fit is per country; S1 queries are scored in chunks).
+Runtime (8 GB laptop, 8 threads): stage 1 (6 blocks) on all 221k val S1 against the full pools in 21 min,
+peak RAM 3.1 GB (the TF-IDF fit is per country; S1 queries are scored in chunks).
 
 ## Pruner experiment (not in the final pipeline)
 

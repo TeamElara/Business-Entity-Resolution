@@ -230,14 +230,15 @@ analysis and all numbers: `docs/blocking.md`.
   leading zeros), Indic-script → Latin token map learned from non-validation training pairs
   (cached in `data/cand/script_token_map.json`, learned on first use) with a rule-based romanizer
   for all nine Indic Unicode blocks, consonant skeletons.
-- `stage1.py`: five TF-IDF blocks in `BLOCKS` (text column, pool filter, top-k, max_df):
+- `stage1.py`: six TF-IDF blocks in `BLOCKS` (text column, pool filter, top-k, max_df):
   `word` (name + address), `skel` (skeletons), `noaddr` (name vs pool records without address),
-  `namenum` (name + address numbers), `concat` (joined name, char 3-grams, vs domain-like names).
+  `namenum` (name + address numbers), `concat` (joined name, char 3-grams, vs domain-like names),
+  `namehouse` (name + whole house numbers such as `J-52/4`).
   `prepare(split, source, country, tmap)` builds every text column; `topk_block()` scores one block.
   The matching pipeline (`src/matching/v2.py`) imports these blocks for its stage 1.
 
-Full validation (220,907 S1, full same-country pools): pair recall **0.983**, oracle F0.5
-**0.9945** at 46.4 candidates/S1 (US 0.990, India 0.972).
+Full validation (220,907 S1, full same-country pools): pair recall **0.984**, oracle F0.5
+**0.9951** at 48.3 candidates/S1 (US 0.990, India 0.976).
 
 ```bash
 # stage-1 pairs + prepared text for val S1 (writes data/cand/stage1_train_val.parquet, prep_train_val.parquet)
