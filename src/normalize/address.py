@@ -42,6 +42,36 @@ HOUSE_MARKER = (
 )
 HOUSE_SEGMENT = r"(?i)(?:^|[,;]\s*)#?\s*(" + HOUSE_TOKEN + r")(?:\s|[,;]|$)"
 
+# A second, opt-in house field for matching experiments. Prefer a number next
+# to a street type over an apartment/unit number, and retain suffixes such as
+# French bis/ter or the letter in 1D. The existing house_no is not changed.
+HOUSE2_TOKEN = r"[A-Za-z]?-?\d{1,7}(?:[-/.][A-Za-z0-9]{1,6}){0,5}(?:\s*(?:bis|ter)|[A-Za-z])?"
+HOUSE2_FR_TOKEN = r"[A-Za-z]?-?\d{1,7}(?:[-/.][A-Za-z0-9]{1,6}){0,5}(?:\s*(?:bis|ter|[A-Za-z]))?"
+HOUSE2_STREET_TAIL = (
+    r"\s+(?:rue|r\.?|route|rte\.?|chemin|ch\.?|avenue|av\.?|ave\.?|"
+    r"boulevard|bd\.?|place|pl\.?|impasse|imp\.?|street|st\.?|road|rd\.?|"
+    r"lane|ln\.?|highway|hwy\.?)(?:\s|$)"
+)
+HOUSE2_STREET = (
+    r"(?i)(?:^|[\s,;#(])(?:n[°ºo]\.?\s*|no\.?\s*|#\s*)?("
+    + HOUSE2_TOKEN
+    + r")" + HOUSE2_STREET_TAIL
+)
+HOUSE2_FR_STREET = (
+    r"(?i)(?:^|[\s,;#(])(?:n[°ºo]\.?\s*|no\.?\s*|#\s*)?("
+    + HOUSE2_FR_TOKEN + r")" + HOUSE2_STREET_TAIL
+)
+HOUSE2_UNIT_THEN_STREET = (
+    r"(?i)(?:^|[,;])\s*(?:apt|apartment|unit|suite|ste|flat|floor|flr)"
+    r"\s*[#:]?\s*[A-Za-z0-9-]+\s*[,;]\s*#?\s*(" + HOUSE2_TOKEN + r")(?:\s|[,;]|$)"
+)
+HOUSE2_MARKER = (
+    r"(?i)(?:^|[\s,;#])(?:h\s*\.?\s*no|house\s*no|door\s*no|"
+    r"plot\s*no|property\s*no|no\.?|n[°º])\s*[:#.-]?\s*("
+    + HOUSE2_TOKEN + r")(?:\s|[.,;]|$)"
+)
+HOUSE2_SEGMENT = r"(?i)(?:^|[,;]\s*)#?\s*(" + HOUSE2_TOKEN + r")(?:\s|[,;]|$)"
+
 INDIA_PIN_LABEL = r"(?i)\bpin(?:\s*code)?\b\s*[:#-]?\s*(\d{6})\b"
 INDIA_PIN_SEGMENT = r"(?:^|[,;])\s*(\d{6})\s*(?:[,;]|$)"
 INDIA_PIN_CITY_END = r"(?i)[,;]\s*[\p{L}][\p{L}\s-]{1,50}\s+(\d{6})\s*$"
@@ -107,6 +137,34 @@ def house_number_expr(address: pl.Expr, postcode: pl.Expr) -> pl.Expr:
         pl.when((house == postcode) | (house == ""))
         .then(None)
         .otherwise(house)
+        .cast(pl.String)
+    )
+
+
+def house_number_v2_expr(address: pl.Expr, postcode: pl.Expr, country: pl.Expr) -> pl.Expr:
+    """Canonical street/building number, without replacing the legacy field."""
+    raw = address.cast(pl.String).fill_null("")
+    france = country.cast(pl.String).fill_null("").str.to_lowercase() == "france"
+    candidate = pl.coalesce(
+        pl.when(france).then(raw.str.extract(HOUSE2_FR_STREET, 1)).otherwise(None),
+        raw.str.extract(HOUSE2_STREET, 1),
+        raw.str.extract(HOUSE2_UNIT_THEN_STREET, 1),
+        raw.str.extract(HOUSE2_MARKER, 1),
+        raw.str.extract(HOUSE2_SEGMENT, 1),
+        house_number_expr(address, postcode),
+    ).str.to_lowercase()
+    canonical = (
+        candidate.str.replace_all(r"\s+", "")
+        .str.replace_all(r"(^|[-/])0+([1-9]\d*)", "${1}${2}")
+    )
+    canonical = pl.when(france).then(
+        canonical.str.replace(r"^(\d+)b$", "${1}bis")
+        .str.replace(r"^(\d+)t$", "${1}ter")
+    ).otherwise(canonical)
+    return (
+        pl.when((candidate == postcode) | (canonical == ""))
+        .then(None)
+        .otherwise(canonical)
         .cast(pl.String)
     )
 

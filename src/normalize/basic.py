@@ -4,9 +4,10 @@ import polars as pl
 
 from .abbreviations import (
     normalize_address_expr,
+    normalize_address_v2_expr,
     normalize_name_expr,
 )
-from .address import address_fields
+from .address import address_fields, house_number_v2_expr
 from .basic_text import clean_text, strip_accents
 from .legal import legal_suffix_and_core
 from .script import script_expr, with_latin_names
@@ -37,6 +38,7 @@ def normalize_df(
         pl.col("business_address").alias("address_raw"),
         name_norm.alias("name_norm"),
         normalize_address_expr(pl.col("business_address"), country).alias("addr_norm"),
+        normalize_address_v2_expr(pl.col("business_address"), country).alias("addr_norm2"),
     )
     name_core, legal_suffix = legal_suffix_and_core(pl.col("name_norm"), country)
     postcode, city, house_no = address_fields(
@@ -48,6 +50,7 @@ def normalize_df(
         postcode.alias("postcode"),
         city.alias("city"),
         house_no.alias("house_no"),
+        house_number_v2_expr(pl.col("business_address"), postcode, country).alias("house_no2"),
         script_expr(pl.col("business_name")).alias("script"),
     )
     token_map = load_token_map() if transliteration_map is None else transliteration_map

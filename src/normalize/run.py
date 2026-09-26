@@ -22,7 +22,7 @@ from .transliteration import load_token_map, train_and_write_map
 CONTRACT = (
     "entity_id", "country", "name_raw", "address_raw", "name_norm",
     "name_core", "legal_suffix", "name_latin", "addr_norm", "postcode",
-    "city", "house_no", "script",
+    "city", "house_no", "house_no2", "addr_norm2", "script",
 )
 
 
