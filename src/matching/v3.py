@@ -128,6 +128,37 @@ def extra_features(c: pl.DataFrame, split: str) -> pl.DataFrame:
     return c.with_columns([pl.lit(None, pl.Float32).alias(f) for f in EXTRA_FEATURES if f not in c.columns])
 
 
+def orphan_ids() -> pl.DataFrame:
+    """cand_id of every train record that appears in some ground-truth match list."""
+    return truth_pairs(load_ground_truth()).select("cand_id").unique()
+
+
+def weights(c: pl.DataFrame, owned: pl.DataFrame, w: float) -> np.ndarray:
+    """Sample weight w for negatives whose record is an orphan (test has ~1.6x more of them)."""
+    orphan = (pl.col("label") == 0) & ~pl.col("cand_id").is_in(owned["cand_id"].implode())
+    return c.select(pl.when(orphan).then(w).otherwise(1.0)).to_series().to_numpy()
+
+
+def tune_weighted(c: pl.DataFrame, truth: pl.DataFrame, owned: pl.DataFrame, w: float, exclusive: bool = False):
+    """Best (F0.5, t, t1) when every orphan false positive counts w times (test-like precision)."""
+    n_true = truth.select("s1_id", pl.col("matched_ids").list.len().alias("n_true"))
+    c = c.with_columns(((pl.col("label") == 0) & ~pl.col("cand_id").is_in(owned["cand_id"].implode())).alias("orph"))
+    best = (0.0, None, None)
+    for t in [x / 100 for x in range(50, 97, 5)]:
+        for t1 in [x / 100 for x in range(30, int(t * 100) + 1, 5)]:
+            p = decide(c, t, t1, exclusive)
+            g = p.group_by("s1_id").agg((pl.col("label") == 1).sum().alias("tp"),
+                                        ((pl.col("label") == 0) & ~pl.col("orph")).sum().alias("fo"),
+                                        pl.col("orph").sum().alias("fr"))
+            d = n_true.join(g, on="s1_id", how="left").fill_null(0).with_columns((pl.col("fo") + w * pl.col("fr")).alias("fp"))
+            prec, rec = pl.col("tp") / (pl.col("tp") + pl.col("fp")), pl.col("tp") / pl.col("n_true")
+            f = d.select(pl.when(pl.col("n_true") == 0).then((pl.col("tp") + pl.col("fp") == 0).cast(pl.Float64))
+                         .when(pl.col("tp") == 0).then(0.0).otherwise(1.25 * prec * rec / (0.25 * prec + rec)).mean()).item()
+            if f > best[0]:
+                best = (f, t, t1)
+    return best
+
+
 def final_features(use_extra: bool):
     return PAIR_FEATURES + REL_FEATURES + (EXTRA_FEATURES if use_extra else [])
 
@@ -267,11 +298,14 @@ def cmd_train(args):
         truth_src, val_src = truth.join(src_s1, on="s1_id", how="semi"), val_c.join(src_s1, on="s1_id", how="semi")
     else:
         truth_src, val_src = truth, val_c
+    owned = orphan_ids()
+    wfit = weights(fit_c, owned, args.orphan_weight)
+    wval = weights(val_src, owned, args.orphan_weight)
     models = []
     for seed in range(args.seeds):
         params = dict(v1.FINAL_PARAMS, seed=SEED + seed)
-        dtrain = lgb.Dataset(fit_c.select(feats).to_numpy(), fit_c["label"].to_numpy(), feature_name=feats)
-        dval = lgb.Dataset(val_src.select(feats).to_numpy(), val_src["label"].to_numpy(), reference=dtrain)
+        dtrain = lgb.Dataset(fit_c.select(feats).to_numpy(), fit_c["label"].to_numpy(), weight=wfit, feature_name=feats)
+        dval = lgb.Dataset(val_src.select(feats).to_numpy(), val_src["label"].to_numpy(), weight=wval, reference=dtrain)
         m = lgb.train(params, dtrain, num_boost_round=6000, valid_sets=[dval],
                       callbacks=[lgb.early_stopping(150, verbose=False), lgb.log_evaluation(1000)])
         m.save_model(str(final_path).replace(".txt", f"_s{seed}.txt"))
@@ -282,8 +316,10 @@ def cmd_train(args):
     print("top features:", ", ".join(f"{f} {g:.0f}" for f, g in imp[:20]))
     X = val_c.select(feats).to_numpy()
     val_c = val_c.with_columns(pl.Series("prob", np.mean([m.predict(X) for m in models], axis=0), dtype=pl.Float32))
-    f_src, t, t1 = v1._tune(val_c.join(val_src.select("s1_id").unique(), on="s1_id", how="semi"), truth_src)
-    pred = v1.decide(val_c, t, t1)
+    f_src, t, t1 = tune_weighted(val_c.join(val_src.select("s1_id").unique(), on="s1_id", how="semi"), truth_src,
+                                 owned, args.tune_weight, not args.no_exclusive)
+    print(f"test-like tuning (orphan FP x{args.tune_weight}, exclusive={not args.no_exclusive}): F0.5 {f_src:.4f} at t={t}, t1={t1}")
+    pred = decide(val_c, t, t1, not args.no_exclusive)
     ref = macro_f05(pred.select("s1_id", "cand_id"), truth)
     per = v1._by_country(pred, truth, s1c)
     print(f"\nthresholds t={t}, t1={t1} (tuned on {'+'.join(args.countries) if args.countries else 'all'} val)")
@@ -294,6 +330,7 @@ def cmd_train(args):
     n = truth.height
     print(f"val: {val_c.height / n:.2f} cands/S1, {pred.height / n:.2f} matches/S1")
     json.dump({"t": t, "t1": t1, "final_k": args.final_k, "p_min": args.p_min, "val_f05": ref, "extra": args.extra,
+               "orphan_weight": args.orphan_weight, "tune_weight": args.tune_weight, "val_testlike_f05": f_src,
                "seeds": args.seeds, "pruner_tag": args.pruner_tag, "val_by_country": per,
                "countries": args.countries}, open(params_path, "w"), indent=2)
     val_c.select("s1_id", "cand_id", "label", "prune_prob", "block_rank", "prob") \
@@ -369,6 +406,8 @@ def main():
     ap.add_argument("--p-min", type=float, default=P_MIN)
     ap.add_argument("--extra", action="store_true", help="use reverse-search / orphan features")
     ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--orphan-weight", type=float, default=1.0, help="training weight of orphan negatives")
+    ap.add_argument("--tune-weight", type=float, default=1.6, help="orphan FP weight when tuning thresholds")
     ap.add_argument("--t", type=float, default=None)
     ap.add_argument("--t1", type=float, default=None)
     ap.add_argument("--no-exclusive", action="store_true")
