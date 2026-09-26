@@ -39,6 +39,7 @@ FRANCE_ADDRESS_ABBREVIATIONS = {
     "av": "avenue",
     "pl": "place",
     "imp": "impasse",
+    "rte": "route",
 }
 
 # Bare R and CH are ambiguous (initials and hospital abbreviations). Expand

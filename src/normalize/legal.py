@@ -30,7 +30,7 @@ LEGAL_FORMS = (
     ("sa", "sa"),
 )
 
-FRANCE_PREFIX_FORMS = ("sarl", "sas", "sasu", "sa", "eurl", "sci", "snc")
+FRANCE_PREFIX_FORMS = ("sarl", "sas", "sasu", "sa", "eurl", "sci", "snc", "e i", "ei")
 
 
 def legal_suffix_and_core(
@@ -50,11 +50,17 @@ def legal_suffix_and_core(
     if country is None:
         return core, suffix
     french = country.cast(pl.String).fill_null("").str.to_lowercase() == "france"
+    ei_suffix = name_norm.str.extract(r"^.+?\s+(e i|ei)$", 1)
+    use_ei_suffix = french & suffix.is_null() & ei_suffix.is_not_null()
+    suffix = pl.when(use_ei_suffix).then(pl.lit("ei")).otherwise(suffix)
+    core = pl.when(use_ei_suffix).then(
+        name_norm.str.replace(r"^(.+?)\s+(?:e i|ei)$", "${1}")
+    ).otherwise(core)
     prefix_variants = "|".join(FRANCE_PREFIX_FORMS)
     prefix = name_norm.str.extract(rf"^({prefix_variants})\s+.+$", 1)
     prefix_core = name_norm.str.replace(rf"^(?:{prefix_variants})\s+(.+)$", "${1}")
     use_prefix = french & suffix.is_null() & prefix.is_not_null()
     return (
         pl.when(use_prefix).then(prefix_core).otherwise(core),
-        pl.when(use_prefix).then(prefix).otherwise(suffix),
+        pl.when(use_prefix).then(prefix.replace({"e i": "ei"})).otherwise(suffix),
     )

@@ -16,6 +16,7 @@ def row(name: str, address: str, country: str = "France") -> dict:
 @pytest.mark.parametrize(("short", "long"), [
     ("R.", "rue"), ("BD", "boulevard"), ("AV", "avenue"),
     ("PL.", "place"), ("CH", "chemin"), ("IMP.", "impasse"),
+    ("RTE.", "route"),
 ])
 def test_french_street_abbreviations(short, long):
     result = row("École SARL", f"017 {short} des Hêtres, Lille")
@@ -38,6 +39,7 @@ def test_french_short_tokens_are_contextual_and_country_guarded():
     assert us["addr_norm"] == "017 bd des hêtres street paul"
     assert us["name_norm"] == "école sarl"
     assert row("ACME", "017 CH des Hêtres, St Paul", "Unseen")["addr_norm"] == "017 ch des hêtres street paul"
+    assert row("ACME", "017 RTE des Hêtres, St Paul", "US")["addr_norm"] == "017 rte des hêtres street paul"
 
 
 @pytest.mark.parametrize("address", [
@@ -72,6 +74,15 @@ def test_dotted_french_forms_and_suffix_only_guard():
     assert row("École S.A.S.U.", "Paris")["legal_suffix"] == "sasu"
     only = row("SCI", "Paris")
     assert only["name_core"] == "sci" and only["legal_suffix"] is None
+
+
+@pytest.mark.parametrize("name", ["Scene Union EI", "EI Scene Union", "Scene Union E.I.", "E.I. Scene Union"])
+def test_french_ei_form_at_either_end(name):
+    result = row(name, "13 Place Sainte Eulalie, Bordeaux")
+    assert result["name_core"] == "scene union"
+    assert result["legal_suffix"] == "ei"
+    assert row(name, "Main Street, Boston", "US")["legal_suffix"] is None
+    assert row("EI", "Paris")["name_core"] == "ei"
 
 
 def test_french_accent_and_ligature_folding_keeps_raw_text():
