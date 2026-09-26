@@ -19,7 +19,9 @@ def test_latin_variant_only_changes_devanagari_name_fields():
         "business_address": ["Pune", "Pune"],
     })
     baseline = base.prepare(source)
-    variant = prepare_with_latin(source)
+    # The test must not depend on a locally generated, gitignored Hindi map.
+    token_map = {"स्काई": "sky", "इंफ्रा": "infra", "प्राइवेट": "private", "लिमिटेड": "limited"}
+    variant = prepare_with_latin(source, token_map=token_map)
     assert_frame_equal(baseline.head(1), variant.head(1))
     assert baseline["name_key"][1] != variant["name_key"][1]
     assert variant["name_key"][1] == "skyinfra"
