@@ -19,21 +19,29 @@ Countries come from the S1 file, never from a fixed list. Outputs (gitignored):
 - data/cand/stage1_{split}.parquet: s1_id, cand_id, s_word, r_word, s_skel, r_skel, s_noaddr, r_noaddr
 - data/cand/prep_{split}.parquet:   prepared text per record, reused by the pruner features
 
+prepare() results can be cached: set BLOCKING_PREP_CACHE to a folder (e.g. data/cand/prep_cache) and
+each (split, source, country) is prepared once and read back on later runs. The cache key covers the
+code of stage1.py and text.py, the token map and the raw file, so any change prepares again.
+
 Usage:
     python -m src.blocking.stage1 --split train
     python -m src.blocking.stage1 --split train --countries India --val-only   # dev run
 """
 import argparse
+import hashlib
+import json
 import os
 import time
 import zlib
+from pathlib import Path
 
 import numpy as np
 import polars as pl
+import pyarrow as pa
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sparse_dot_topn import sp_matmul_topn
 
-from src.common.io import REPO_ROOT, scan_source
+from src.common.io import REPO_ROOT, scan_source, source_path
 from src.common.split import is_val
 from .text import NON_LATIN, clean_expr, latinize, load_script_map, skeletonize
 from .tfidf_v0 import list_countries, peak_ram_gb
@@ -66,17 +74,54 @@ CONCAT_DROP = (r"\b(private|limited|pvt|ltd|llc|l l c|llp|inc|incorporated|corp|
 
 
 def char_trigrams(texts: pl.Series) -> pl.Series:
-    """Space-separated character 3-grams of each string, so a word TF-IDF acts as a char 3-gram one."""
-    return pl.Series([" ".join(t[i:i + 3] for i in range(max(len(t) - 2, 1))) for t in texts.to_list()],
-                     dtype=pl.String)
+    """Space-separated character 3-grams of each string, so a word TF-IDF acts as a char 3-gram one.
+
+    Strings shorter than 3 characters are kept whole ("" stays "")."""
+    k = (texts.str.len_chars().cast(pl.Int64) - 2).clip(lower_bound=1)  # 3-grams per string
+    grams = (
+        pl.DataFrame({"t": texts, "k": k})
+        .select(pl.col("t").repeat_by("k").explode(), pl.int_ranges(0, "k").explode().alias("i"))
+        .select(pl.col("t").str.slice(pl.col("i"), 3))["t"]
+    )
+    offsets = np.zeros(len(texts) + 1, dtype=np.int64)
+    np.cumsum(k.to_numpy(), out=offsets[1:])
+    return pl.Series("", pa.LargeListArray.from_arrays(pa.array(offsets), grams.rechunk().to_arrow())).list.join(" ")
+
+
+def _prep_cache_path(split: str, source: int, country: str, tmap: dict) -> Path | None:
+    """Cache file of prepare() for these inputs, or None when BLOCKING_PREP_CACHE is not set."""
+    folder = os.environ.get("BLOCKING_PREP_CACHE")
+    if not folder:
+        return None
+    h = hashlib.sha1()
+    for f in (Path(__file__), Path(__file__).with_name("text.py")):
+        h.update(f.read_bytes())
+    h.update(json.dumps(tmap, sort_keys=True, ensure_ascii=False).encode())
+    raw = source_path(split, source).resolve()
+    h.update(f"{raw}|{raw.stat().st_size}|{raw.stat().st_mtime_ns}".encode())
+    safe = "".join(ch if ch.isalnum() else "_" for ch in country)
+    return Path(folder) / f"prep_{split}_s{source}_{safe}_{h.hexdigest()[:12]}.parquet"
 
 
 def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     """Prepared text for one source file and one country.
 
     Columns: entity_id, name, addr, text, skel, skel_name, namenum, concat3, domainlike, namehouse,
-    addr_empty, nonlatin.
+    addr_empty, nonlatin. Cached when BLOCKING_PREP_CACHE is set (see the module docstring).
     """
+    path = _prep_cache_path(split, source, country, tmap)
+    if path is not None and path.exists():
+        return pl.read_parquet(path)
+    d = _prepare(split, source, country, tmap)
+    if path is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{os.getpid()}.tmp")
+        d.write_parquet(tmp)
+        tmp.replace(path)
+    return d
+
+
+def _prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     d = (
         scan_source(split, source, country=country, columns=["entity_id", "business_name", "business_address"])
         .select(
