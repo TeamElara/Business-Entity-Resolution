@@ -8,6 +8,9 @@ Blocks, all fitted on the S2+S3 pool of one country and queried with that countr
           blocks above rank poorly.
 - namenum: name + the numbers of the address only. A long S1 address dilutes the word block;
           same name + same house number is found here (India val: +2.2 pts stage-1 recall).
+- concat: the name with legal/filler words removed and spaces dropped ("nikolettamoorerhomes"),
+          as character 3-grams, against only pool records whose name is one long token (domain-like
+          names). 35% of the pairs the other four blocks miss are such names (val: +0.5 pts).
 
 Countries come from the S1 file, never from a fixed list. Outputs (gitignored):
 - data/cand/stage1_{split}.parquet: s1_id, cand_id, s_word, r_word, s_skel, r_skel, s_noaddr, r_noaddr
@@ -38,13 +41,25 @@ BLOCKS = {  # name: (text column, pool filter column or None, top-k, max_df)
     "skel": ("skel", None, 20, 0.01),
     "noaddr": ("skel_name", "addr_empty", 10, 0.05),
     "namenum": ("namenum", None, 10, 0.05),
+    "concat": ("concat3", "domainlike", 5, 0.05),
 }
+# legal forms and filler words dropped before concatenating a name (English, Indian and French forms)
+CONCAT_DROP = (r"\b(private|limited|pvt|ltd|llc|l l c|llp|inc|incorporated|corp|corporation|co|company|plc"
+               r"|group|enterprises|services|sarl|sas|sasu|sa|eurl|sci|snc|and|et|of|the|de|la|le|les|des|du"
+               r"|m s|mr|mrs|dr|shri|sri|smt)\b")
+
+
+def char_trigrams(texts: pl.Series) -> pl.Series:
+    """Space-separated character 3-grams of each string, so a word TF-IDF acts as a char 3-gram one."""
+    return pl.Series([" ".join(t[i:i + 3] for i in range(max(len(t) - 2, 1))) for t in texts.to_list()],
+                     dtype=pl.String)
 
 
 def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
     """Prepared text for one source file and one country.
 
-    Columns: entity_id, name, addr, text, skel, skel_name, namenum, addr_empty, nonlatin.
+    Columns: entity_id, name, addr, text, skel, skel_name, namenum, concat3, domainlike, addr_empty,
+    nonlatin.
     """
     d = (
         scan_source(split, source, country=country, columns=["entity_id", "business_name", "business_address"])
@@ -62,7 +77,13 @@ def prepare(split: str, source: int, country: str, tmap: dict) -> pl.DataFrame:
         (pl.col("addr") == "").alias("addr_empty"),
         (pl.col("name") + " " + pl.col("addr").str.extract_all(r"\d+").list.join(" ")).str.strip_chars().alias("namenum"),
     )
-    return d.with_columns(skel=skeletonize(d["text"]), skel_name=skeletonize(d["name"]))
+    concat = d["name"].str.replace_all(CONCAT_DROP, " ").str.replace_all(r"\s+", "")
+    return d.with_columns(
+        skel=skeletonize(d["text"]),
+        skel_name=skeletonize(d["name"]),
+        concat3=char_trigrams(concat),
+        domainlike=(d["name"].str.split(" ").list.len() == 1) & (concat.str.len_chars() >= 8),
+    )
 
 
 def fit_tfidf(texts: list[str], max_df: float):
@@ -148,7 +169,7 @@ def main() -> None:
         t1 = time.time()
         pr, q, p = run_country(args.split, country, tmap, s1_filter, args.chunk, args.threads)
         pairs.append(pr)
-        preps.append(pl.concat([q, p]).drop("text", "skel", "namenum"))
+        preps.append(pl.concat([q, p]).drop("text", "skel", "namenum", "concat3"))
         print(f"[{country}] S1 {q.height:,} x pool {p.height:,} -> {pr.height:,} pairs "
               f"({pr.height / max(q.height, 1):.1f}/S1) in {time.time() - t1:.0f}s, peak RAM {peak_ram_gb():.1f} GB",
               flush=True)

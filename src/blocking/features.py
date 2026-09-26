@@ -9,7 +9,7 @@ import polars as pl
 from rapidfuzz import fuzz
 from rapidfuzz.process import cpdist
 
-BLOCK_COLS = ["s_word", "r_word", "s_skel", "r_skel", "s_noaddr", "r_noaddr", "s_namenum", "r_namenum"]
+BLOCK_COLS = ["s_word", "r_word", "s_skel", "r_skel", "s_noaddr", "r_noaddr", "s_namenum", "r_namenum", "s_concat", "r_concat"]
 FEATURES = [
     *BLOCK_COLS, "n_blocks", "s_word_rel", "s_skel_rel", "n_cands",
     "name_tsr", "name_ratio", "name_partial", "name_skel_tsr",
@@ -55,7 +55,7 @@ def add_features(pairs: pl.DataFrame, s1: pl.DataFrame, pool: pl.DataFrame) -> p
         addr_ratio=_sim(d["q_addr"], d["c_addr"], fuzz.ratio),
     )
     d = d.with_columns(
-        pl.sum_horizontal(pl.col(c).is_not_null() for c in ("s_word", "s_skel", "s_noaddr", "s_namenum")).alias("n_blocks"),
+        pl.sum_horizontal(pl.col(c).is_not_null() for c in ("s_word", "s_skel", "s_noaddr", "s_namenum", "s_concat")).alias("n_blocks"),
         (pl.col("s_word") / pl.col("s_word").max().over("s1_id")).alias("s_word_rel"),
         (pl.col("s_skel") / pl.col("s_skel").max().over("s1_id")).alias("s_skel_rel"),
         pl.len().over("s1_id").alias("n_cands"),
