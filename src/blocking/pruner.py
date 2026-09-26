@@ -100,6 +100,7 @@ def cmd_train(args) -> None:
 
     scored = va.select("s1_id", "cand_id").with_columns(
         prob=pl.Series(model.predict(va.select(FEATURES).to_numpy()), dtype=pl.Float32))
+    scored.write_parquet(CAND_DIR / f"pruner_val_scored{args.tag}.parquet")
     # all val S1 queried in stage 1 count, including those left with no pairs
     vtruth = truth.filter(pl.Series([is_val(x) for x in truth["s1_id"].to_list()], dtype=pl.Boolean)) \
         .join(pl.read_parquet(CAND_DIR / f"prep_train{args.tag}.parquet", columns=["entity_id"])

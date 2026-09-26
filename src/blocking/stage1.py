@@ -125,6 +125,8 @@ def main() -> None:
     ap.add_argument("--val-only", action="store_true", help="only query val S1 (train split, dev runs)")
     ap.add_argument("--dev-sample", action="store_true",
                     help="val S1 plus a 10%% non-val sample (crc32 %% 10 == 1) to train the pruner quickly")
+    ap.add_argument("--crc-mod", type=int, nargs="*",
+                    help="only S1 with crc32(id) %% 10 in these values (e.g. 1 = a 10%% non-val sample)")
     ap.add_argument("--chunk", type=int, default=20000, help="S1 queries scored per batch")
     ap.add_argument("--threads", type=int, default=os.cpu_count())
     ap.add_argument("--tag", default="", help="suffix for output files, e.g. _dev")
@@ -138,6 +140,9 @@ def main() -> None:
         s1_filter = is_val
     elif args.dev_sample:
         s1_filter = lambda x: zlib.crc32(x.encode()) % 10 in (0, 1)
+    elif args.crc_mod:
+        mods = set(args.crc_mod)
+        s1_filter = lambda x: zlib.crc32(x.encode()) % 10 in mods
     pairs, preps = [], []
     for country in countries:
         t1 = time.time()
