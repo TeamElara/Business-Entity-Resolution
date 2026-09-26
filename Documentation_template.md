@@ -37,6 +37,8 @@ V2 top six cost 0.0014 validation F0.5 versus top eight but retained 13% fewer c
 
 Ojaswi independently measured all **six of her own blocks** with the zero-width-joiner fix used in v3: 48.3 stage-1 candidates/S1 (p95 59, max 70), pair recall 0.9849, oracle 0.9953 on 220,907 full-validation S1s, with no S1 left without candidates. US: 46.5 candidates/S1, recall 0.990, oracle 0.997; India: 51.0, recall 0.9773, oracle 0.9929. S2 recall was 0.987 and S3 recall 0.984. This is a standalone retrieval measurement, not the eight-block union or v3 final candidate file. The team uses Arihant's pruner; Ojaswi's alternative pruner is not in v3.
 
+An optional faster `prepare()` and cache in PR #5 matched all 108 compared text columns across the nine test source/country files, but saves less than 3% of the full test run. It is **not** in the frozen candidate code or the submitted-file generation path; retaining the exact measured stage-1 code takes priority.
+
 ## 4. Matching model
 
 Mahatva's normalizer preserves raw text, cleaned `name_core`, addresses, script, and Devanagari `name_latin` learned from **non-validation** Hindi/Latin pairs with a rule fallback. Ojaswi's text path folds Latin accents, normalizes domains/digit look-alikes, romanizes additional Indic scripts using non-validation token alignments plus a built-in fallback, and builds consonant skeletons. Neither token map uses validation labels.
