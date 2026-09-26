@@ -35,10 +35,20 @@ On macOS/Linux, use `python3.11 -m venv .venv`, `.venv/bin/python`,
 copies. LightGBM may require `libomp` on macOS. The v2 feature step takes about
 an hour on the team's measured machine; check available RAM/disk before running.
 
-The raw-to-output command sequence is not yet verified end-to-end on this
-fresh clone. The packaging dry run verifies dependencies, tests, self-test,
-and full normalization first. Model training/test is owned by Arihant; copy
-only the **exact selected run's** outputs into the final package.
+Fresh-clone dry run on Windows / Python 3.13 (`main` at `dc87f81`, 26 Sep):
+the pinned dependency install succeeded; `src.common.selftest` passed; all
+six normalization Parquets were generated from the supplied raw data. The
+three test-file row counts, per-country statistics and 150-token Hindi map
+match Mahatva's existing `normalization_report.json`. `pytest` initially had
+**one failure** because a test required the gitignored Hindi map before it
+was generated; after normalization, 86 tests passed. PR #3 makes that test
+self-contained. `python -m src.matching.v2 --help` on clean `main` fails with
+`ModuleNotFoundError: resource` on Windows; PR #3 also fixes that import and
+passes its smoke test. Merge/retest those fixes before final packaging.
+
+The full raw-to-output model training/test sequence is **not yet verified**
+on this fresh clone. Model training/test is owned by Arihant; copy only the
+**exact selected run's** outputs into the final package.
 
 ## 2. Validate the final files
 
