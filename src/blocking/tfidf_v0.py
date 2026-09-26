@@ -19,15 +19,18 @@ max_df drops tokens found in more than that share of the pool (street types, "pr
 """
 import argparse
 import os
-import resource
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import polars as pl
+import psutil
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sparse_dot_topn import sp_matmul_topn
+
+if sys.platform != "win32":
+    import resource
 
 from src.common.io import REPO_ROOT, load_ground_truth, scan_source
 from src.common.metrics import blocking_report
@@ -100,6 +103,9 @@ def topk_cosine(q_texts: list[str], p_texts: list[str], k: int, chunk: int, n_th
 
 
 def peak_ram_gb() -> float:
+    if sys.platform == "win32":
+        memory = psutil.Process().memory_info()
+        return getattr(memory, "peak_wset", memory.rss) / 1e9
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return peak / 1e9 if sys.platform == "darwin" else peak / 1e6  # bytes on macOS, KB on Linux
 
