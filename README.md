@@ -233,7 +233,7 @@ raw TSVs, check out that commit, install its pinned dependencies, set up
 python -m src.matching.baseline_v0 features
 python -m src.matching.baseline_v0 train
 python -m src.matching.baseline_v0 test
-python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test
+python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
 The same commands at the current branch head can generate a **fresh** run,
