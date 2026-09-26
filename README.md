@@ -221,6 +221,31 @@ See `docs/phase12_generalization.md` for exact denominators, retrieval
 recalls/oracle ceilings, limitations, and the handoff to matching/blocking
 owners. This diagnostic has not replaced the team's submitted model.
 
+## Confirmed upload #1 and final package
+
+The most recent **confirmed uploaded** solution in `docs/submission_log.md`
+is baseline v0 at commit `8d7d4c4` (validation macro F0.5 0.9043, public
+leaderboard 0.886). To reproduce that historical version from the supplied
+raw TSVs, check out that commit, install its pinned dependencies, set up
+`data/raw` as above, and run:
+
+```powershell
+python -m src.matching.baseline_v0 features
+python -m src.matching.baseline_v0 train
+python -m src.matching.baseline_v0 test
+python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test
+```
+
+The same commands at the current branch head can generate a **fresh** run,
+but normalization changed after the upload; do not claim it reproduces the
+0.886 leaderboard file without verifying the outputs. The methodology in
+`Documentation_template.md` describes the confirmed upload and identifies
+the measurements still required for the actual final package. That package
+must include both validated output TSVs, self-contained code and pinned
+dependencies, and a methodology reconciled to the **same final code and
+outputs**. The candidate list also needs confirmation against the organizer's
+latest exact-set instruction before freezing the package.
+
 ## Team ownership
 
 - `src/normalize/`: Mahatva
