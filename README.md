@@ -221,32 +221,37 @@ See `docs/phase12_generalization.md` for exact denominators, retrieval
 recalls/oracle ceilings, limitations, and the handoff to matching/blocking
 owners. This diagnostic has not replaced the team's submitted model.
 
-## Confirmed upload #2 and final package
+## Selected v2 pipeline and final package
 
-The latest **confirmed uploaded** solution in `docs/submission_log.md` is
+The latest **confirmed public** result in `docs/submission_log.md` is
 matching v1 (validation macro F0.5 0.9525, public leaderboard 0.919).
-With pinned dependencies installed and `data/raw` set up as above, its
-documented raw-data-to-output commands are:
+The team has now selected matching v2 with Ojaswi's first three stage-1
+blocks and Arihant's matching pruner, top six candidates (validation macro
+F0.5 0.9689). Its test/leaderboard result is **not yet confirmed**. With
+pinned dependencies installed and `data/raw` set up as above, the selected
+raw-data-to-output commands on Windows are:
 
 ```powershell
 python -m src.normalize.run --split all
-python -m src.matching.v1 features
-python -m src.matching.v1 prune
-cp data/models/v1_pruner_0.txt data/models/v1_pruner_pm_0.txt
-cp data/models/v1_pruner_1.txt data/models/v1_pruner_pm_1.txt
-python -m src.matching.v1 train --tag pm --p-min 0.003
-python -m src.matching.v1 test --tag pm
+python -m src.matching.v2 features
+python -m src.matching.v2 prune
+Copy-Item data/models/v2_pruner_0.txt data/models/v2_pruner_k6_0.txt
+Copy-Item data/models/v2_pruner_1.txt data/models/v2_pruner_k6_1.txt
+python -m src.matching.v2 train --tag k6 --final-k 6 --p-min 0.003
+python -m src.matching.v2 test --tag k6
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-The v1 cascade is wide retrieval → LightGBM pruner → final candidate list
-(`candidate_pairs.tsv`) → separate final LightGBM matcher, which scores
-exactly that list. `docs/matching_v1.md` has the measured features, cutoff,
-validation, error analysis, and transfer checks. The methodology in
-`Documentation_template.md` describes upload #2 and distinguishes Ojaswi's
-not-yet-uploaded multi-block alternative. If a later model/blocker wins,
-replace these commands and verify the **exact final** outputs, candidate
-statistics, and document before creating the submission zip.
+On macOS/Linux, use `cp` instead of `Copy-Item`. The v2 cascade is wide
+retrieval (the two v1 blocks plus Ojaswi's `word`, `skel`, and `noaddr`
+blocks) → LightGBM pruner → final candidate list (`candidate_pairs.tsv`) →
+separate final LightGBM matcher, which scores exactly that list. Ojaswi's
+later `namenum` and `concat` blocks are **not** part of the measured v2
+model. `docs/matching_v2.md` and `docs/blocking.md` give the validation
+numbers and distinctions; `Documentation_template.md` is the methodology
+draft. Measure the **exact final** test outputs and update that document
+before creating the submission zip. The previous uploaded v1 recipe is in
+`docs/matching_v1.md`.
 
 ## Team ownership
 
