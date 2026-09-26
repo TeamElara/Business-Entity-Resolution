@@ -77,6 +77,8 @@ For confirmed upload #2, with pinned `requirements.txt` and the supplied raw TSV
 python -m src.normalize.run --split all
 python -m src.matching.v1 features
 python -m src.matching.v1 prune
+cp data/models/v1_pruner_0.txt data/models/v1_pruner_pm_0.txt
+cp data/models/v1_pruner_1.txt data/models/v1_pruner_pm_1.txt
 python -m src.matching.v1 train --tag pm --p-min 0.003
 python -m src.matching.v1 test --tag pm
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
