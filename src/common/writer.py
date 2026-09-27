@@ -30,7 +30,8 @@ def write_id_lists(pairs: pl.DataFrame, s1_ids, path, list_col: str,
     if extra.height:
         raise ValueError(f"{extra['s1_id'].n_unique()} S1 ids not in s1_ids, e.g. {extra['s1_id'].head(5).to_list()}")
     if order_by is not None:
-        p = p.sort(["s1_id", order_by], descending=[False, descending])
+        # cand_id breaks exact probability ties, so the written order is identical on every run
+        p = p.sort(["s1_id", order_by, "cand_id"], descending=[False, descending, False], maintain_order=True)
 
     lists = p.group_by("s1_id", maintain_order=True).agg(
         pl.col("cand_id").unique(maintain_order=True).str.join(",").alias(list_col)
