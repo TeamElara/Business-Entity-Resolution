@@ -4,20 +4,21 @@ Team solution for the Amazon ML Challenge 2026.
 
 ## Submission at a glance
 
-The current CP2 pipeline normalizes the supplied S1/S2/S3 records, unions
+The selected `cp2d` pipeline normalizes the supplied S1/S2/S3 records, unions
 Ojaswi's six retrieval blocks with Arihant's two, then uses a LightGBM pruner
 to keep at most six S2/S3 candidates per S1 at probability ≥0.003. A separate
 LightGBM matcher scores **only those submitted candidates** using pair,
 per-S1, orphan, reverse-search, S1 no-match, and legal-form features. The
 decision assigns each S2/S3 record to at most one S1 and uses thresholds
-US 0.95, India/France 0.90, with fallback `t1=0.5`. A final US 0.965
-threshold probe may change this at the freeze.
+US 0.95, India/France 0.90, with fallback `t1=0.5`. The US 0.965 probe tied
+on the public leaderboard; the final keeps 0.95.
 
-The team reports validation macro F0.5 **0.9766** and best public leaderboard
-**0.946** so far; the private score is unknown. The current 0.946 output has 5.37
+The team reports `cp2d` validation macro F0.5 **0.9765** at the validation-best
+threshold and final public leaderboard **0.946**; the private score is unknown.
+The final output has 5.37
 candidates and 3.20 matches per S1, with 5.5% of S1s unmatched. The two
-submitted TSVs passed `utils/validate_submission.py --check-ids`, according
-to the producing machine. See `RUN.md` beside this README for the
+submitted TSVs independently passed `utils/validate_submission.py --check-ids`
+on all 1,732,544 test S1s. See `RUN.md` beside this README for the
 raw-data-to-output sequence and `Documentation_template.md` at the zip root
 for the methodology, score progression, and experiment decisions.
 
@@ -282,7 +283,7 @@ evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
 ## CP2 pipeline and final package
 
-The best team-reported public leaderboard score so far is **0.946** for CP2 with
+The final team-reported public leaderboard score is **0.946** for `cp2d` with
 US `t=0.95` and India/France `t=0.90`. CP2 scored 0.943 at `t=0.85` and
 0.944 at `t=0.90`; preceding v3 upload #5 scored 0.933 at `t=0.85`
 (up from v2's 0.924). The private score is unknown.
@@ -293,11 +294,13 @@ validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
 per-S1, orphan-probability and reverse-search features. The CP2 candidate
 also uses Ojaswi's S1 no-match probability (`p_zero`) and legal-form
 agreement. Its original grouped OOF AUC was 0.9849; the deterministic
-reverse-rank rebuild used for `cp2d` measured 0.9840 (PR #8). The model is
+reverse-rank rebuild used for `cp2d` measured 0.9840. The model is
 documented in `docs/orphan_model.md`.
 Reported validation macro F0.5 rises from v3 base 0.9709 to + orphan 0.9731,
-+ reverse search **0.9739** (India 0.9709, US 0.9759), then CP2 **0.9766**
-(India 0.9740, US 0.9782). Legal-form agreement recovers information
++ reverse search **0.9739** (India 0.9709, US 0.9759), then rebuilt `cp2d`
+**0.9765** at validation-best `t=0.75` (0.9759 at upload `t=0.85`;
+India 0.9739, US 0.9782). The earlier pre-rebuild CP2 comparison was 0.9766.
+Legal-form agreement recovers information
 hidden when forms such as SARL and SAS are removed from `name_core`.
 The validation-best primary threshold was `t=0.75`; the earlier test setting
 `t=0.85` gave about 3.3 predictions/S1. Ojaswi's label-free check found US
@@ -305,7 +308,7 @@ predictions at the full estimated true-match count with many orphan-like
 matches, supporting a stricter US threshold. The current decision uses
 US `t=0.95`, India/France `t=0.90`, fallback `t1=0.5`, and the
 one-record-to-one-S1 rule; it yields 3.20 predictions/S1 and 5.5% unmatched.
-The 0.9766 figure is **validation**;
+Those F0.5 figures are **validation**;
 0.943/0.944/0.946 are **public** scores, not private scores. With pinned
 dependencies installed and `data/raw` set up as above,
 the CP2 build stages are:
@@ -327,9 +330,8 @@ python utils/validate_submission.py --matching output/matching_results.tsv --can
 The `test` command builds the stage-1/pruner cache and writes both TSVs. If
 the cache already exists, `python -m src.matching.v3 rescore --tag cp2d --t
 0.90 --t-country US=0.95` runs only the final scoring and decision step.
-Arihant reports that the `--t-country` code is local at `4e92cb0` but had
-not landed on `main` when this draft was updated. Confirm the frozen US
-threshold (0.95 or 0.965) and use that exact command after the freeze.
+Arihant's `--t-country` code is on frozen `main` at `6eb608f` (introduced in
+`4b8b035`). The US 0.965 probe also scored 0.946; the final stays at 0.95.
 The pruned candidate list is written to
 `candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
 Test decisions assign each S2/S3 record to at most one S1, with selected
