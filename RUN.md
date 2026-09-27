@@ -1,12 +1,13 @@
 # Reproduce the CP2 candidate run and assemble the submission (draft)
 
-This is the raw-data-to-output guide for the **CP2 candidate** as of 26
+This is the raw-data-to-output guide for the **CP2 candidate** as of 27
 September 2026: v3 + orphan/reverse features + Ojaswi's S1 no-match score
 (`p_zero`) + legal-form agreement. `cp2` is a provisional model tag; replace
 it with the exact selected tag at the 27 September 4 PM freeze. CP2's reported
-validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). No public CP2
-score or final pick is claimed here until Arihant reports the exact upload.
-The provisional test decision is `t=0.85`, `t1=0.5`, with each S2/S3 record
+validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). Arihant reports
+public LB 0.943 at `t=0.85`, 0.944 at `t=0.90`, and 0.946 with US `t=0.95`
+and India/France `t=0.90`. The final pick and private score are pending.
+The provisional test decision uses those country thresholds, with each S2/S3 record
 assigned to at most one S1. Do not package until the exact final test files
 pass the validator and match the selected leaderboard upload.
 
@@ -35,7 +36,7 @@ $env:DATA_RAW = "C:\path\to\student_resource\dataset"
 .\.venv\Scripts\python.exe -m src.matching.v3 prune
 .\.venv\Scripts\python.exe -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
 .\.venv\Scripts\python.exe -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
-.\.venv\Scripts\python.exe -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
+.\.venv\Scripts\python.exe -m src.matching.v3 rescore --tag cp2d --t 0.90 --t-country US=0.95
 .\.venv\Scripts\python.exe utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$env:DATA_RAW\test" --check-ids
 ```
 
@@ -56,8 +57,11 @@ the reverse files. It writes `s1_zero_{train,test}.parquet` with `p_zero`.
 the normalized records. Check that all these artifacts exist before training;
 missing extra features may be filled with nulls rather than causing a hard
 failure. The `test` command first builds the full test candidate cache; the
-explicit `rescore` command uses that cache to produce the provisional
-`t=0.85`, `t1=0.5` files. The final matcher scores only the pruned top-six,
+explicit `rescore` command is Arihant's provisional choice for a `cp2d`
+cache, which the earlier `cp2` test step does not produce. The `--t-country`
+flag was still being added when this draft was updated. After the freeze,
+replace the train/test commands with the exact steps that produced `cp2d`.
+The final matcher scores only the pruned top-six,
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install

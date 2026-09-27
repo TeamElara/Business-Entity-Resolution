@@ -257,10 +257,11 @@ evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
 ## V3 candidate pipeline and final package
 
-The latest reported public leaderboard score is **0.933** from upload #5,
-v3 with orphan and reverse-search features at `t=0.85` (up from v2's 0.924).
-This is a provisional public result; CP2's first upload and the final pick are
-pending. V3 adds all six
+The latest team-reported public leaderboard score is **0.946** for CP2 with
+US `t=0.95` and India/France `t=0.90`. CP2 scored 0.943 at `t=0.85` and
+0.944 at `t=0.90`; preceding v3 upload #5 scored 0.933 at `t=0.85`
+(up from v2's 0.924). The final pick and private score remain pending.
+V3 adds all six
 of Ojaswi's stage-1 blocks to Arihant's two blocks. A LightGBM pruner keeps
 at most six candidates per S1 with probability at least 0.003 (reported
 validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
@@ -276,9 +277,9 @@ The validation-best primary threshold was `t=0.75`; the test setting
 `t=0.85` yields about 3.3 predictions/S1, nearer the label-free estimate
 of 3.47 true test matches/S1. A v2 threshold probe improved public LB
 from 0.918 to 0.924, and v3 at `t=0.85` reached 0.933. The provisional
-CP2 decision uses `t=0.85`,
-`t1=0.5` and the one-record-to-one-S1 decision rule. These are **validation**
-figures, not CP2 public/private leaderboard scores. With pinned
+CP2 country decision uses US `t=0.95`, India/France `t=0.90`, and the
+one-record-to-one-S1 decision rule. The 0.9766 figure is **validation**;
+0.943/0.944/0.946 are **public** scores, not private scores. With pinned
 dependencies installed and `data/raw` set up as above,
 the draft v3 raw-data-to-output commands are:
 
@@ -293,15 +294,18 @@ python -m src.matching.v3 features
 python -m src.matching.v3 prune
 python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
 python -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
-python -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
+python -m src.matching.v3 rescore --tag cp2d --t 0.90 --t-country US=0.95
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-`cp2` is a provisional local model tag; reconcile it with the exact final
-tag after Arihant freezes the run. The pruned candidate list is written to
+The `cp2d` rescore command is Arihant's provisional selection. Its
+`--t-country` flag was still being added when this draft was updated; the
+earlier `cp2` train/test steps do not establish a `cp2d` cache. Reconcile
+the whole command sequence with the exact final run after the freeze.
+The pruned candidate list is written to
 `candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
 Test decisions assign each S2/S3 record to at most one S1, with provisional
-`t=0.85` and `t1=0.5`.
+US `t=0.95` and India/France `t=0.90`.
 In a sampled manual review of about 200 France S1s (about 1,250 candidate
 pairs), the team reports precision on unambiguous predicted matches rising
 from about 0.90 for v1 to 0.958 for v3. This is not a France F0.5 score.
