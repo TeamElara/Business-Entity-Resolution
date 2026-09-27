@@ -82,6 +82,15 @@ passed 87 tests and `src.common.selftest`; the v3, reverse-search and orphan
 still requires a **new clean-clone run on final main** after the model
 freeze; do not claim the current smoke check reproduces the final TSVs.
 
+Fresh clone of current `main` at `25da840` on 27 Sep (Windows, Python 3.12.14):
+the pinned install succeeded, **87 tests passed**, and `src.common.selftest`
+passed. `--help` exited successfully for normalization, reverse search,
+orphan (including grouped mode), all five v3 commands, and the validator.
+`s1_zero` has no help mode, so its import was checked without starting the
+full rebuild. Current `main` does **not** yet expose `--t-country`; the
+reported 0.946 rescore command must be rechecked after that flag lands.
+This smoke run did not regenerate the final TSVs.
+
 The full raw-to-output v3 training/test sequence is **not yet verified** on
 this fresh clone. Model training/test is owned by Arihant; copy only the
 **exact selected run's** outputs into the final package. For a short smoke
