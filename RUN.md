@@ -60,6 +60,30 @@ explicit `rescore` command uses that cache to produce the provisional
 `t=0.85`, `t1=0.5` files. The final matcher scores only the pruned top-six,
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
+### Blocking artifacts (reverse search, orphan model, S1 no-match model)
+
+The five `src.blocking` commands above build the record- and S1-level inputs of `--extra` / `--cp2`.
+Run them in this order; each writes to `data/cand/` (8 GB Mac, 8 threads, peak RAM ~3 GB):
+
+| command | time | output |
+|---|---|---|
+| `reverse --split train` | 50–95 min | `rev_train.parquet` (103,176,312 rows: top 10 S1 per train S2/S3 record) |
+| `reverse --split test` | 25–40 min | `rev_test.parquet` (99,660,618 rows) |
+| `orphan` | 11 min | `orphan_{train,test}.parquet` (`rec_id, orphan_prob`; train out-of-fold), `orphan_auc.json` |
+| `orphan --group-by-s1` | 8–12 min | `orphan_train_grouped.parquet` (input of `s1_zero`), `orphan_auc_grouped.json` |
+| `s1_zero` | 7–10 min | `s1_zero_{train,test}.parquet` (`s1_id, p_zero`), `s1_zero_auc.json` |
+
+The first command also learns `data/cand/script_token_map_v2.json` (Indic token map) from the
+non-validation training pairs; a fresh clone re-learns a byte-identical map. Expected OOF AUCs:
+orphan 0.9736, s1_zero 0.984–0.985 (see `docs/orphan_model.md`).
+
+Reproducibility: a rebuild from raw data reproduces every reverse-search score, and the orphan
+files bit for bit. With the code of 26 Sep, the order of exactly tied S1 (identical S1 text, same
+score) can change between runs, which moves `rank` and therefore `p_zero` slightly; the
+deterministic tie-break (PR #8, ties broken by `s1_id`) makes repeated runs byte-identical (checked
+on France test). To reproduce the submitted file exactly, use the `data/cand` files that were
+built with the same code as the final model.
+
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
 succeeded. On current `main` at `00c5bc7` with Python 3.12.14, the no-data
 toy self-test passed. Before normalization, `pytest` reported 85 passed and
