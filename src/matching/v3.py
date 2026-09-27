@@ -417,13 +417,19 @@ def cmd_rescore(args):
     out = REPO_ROOT / (args.out or "output")
     CAND_DIR.mkdir(parents=True, exist_ok=True)
     cand.write_parquet(CAND_DIR / f"v3_test{'_' + args.tag if args.tag else ''}.parquet")
-    pred = decide(cand, t, t1, not args.no_exclusive)
+    t_by = dict((k, float(x)) for k, x in (kv.split("=") for kv in args.t_country)) if args.t_country else {}
+    if t_by:  # per-country thresholds (a record belongs to one country, so the one-S1 rule stays per country)
+        cc = cand.join(s1.select(pl.col("entity_id").alias("s1_id"), "country"), on="s1_id")
+        pred = pl.concat([decide(cc.filter(pl.col("country") == k), t_by.get(k, t), t1, not args.no_exclusive).drop("country")
+                          for k in countries_of(s1)])
+    else:
+        pred = decide(cand, t, t1, not args.no_exclusive)
     write_outputs(pred.select("s1_id", "cand_id", "prob"),
                   cand.select("s1_id", "cand_id", "sources", "block_score", "block_rank"), s1["entity_id"], out)
     n = s1.height
     print(f"test -> {out}: {n:,} S1, {cand.height / n:.2f} cands/S1, {pred.height / n:.2f} matches/S1, "
           f"{(n - pred['s1_id'].n_unique()) / n:.1%} S1 with no match (k={final_k}, t={t}, t1={t1}, "
-          f"exclusive={not args.no_exclusive})")
+          f"exclusive={not args.no_exclusive}, per-country t={t_by or '-'})")
 
 
 def main():
@@ -443,6 +449,7 @@ def main():
     ap.add_argument("--t", type=float, default=None)
     ap.add_argument("--t1", type=float, default=None)
     ap.add_argument("--no-exclusive", action="store_true")
+    ap.add_argument("--t-country", nargs="*", help="per-country threshold overrides, e.g. US=0.95")
     ap.add_argument("--out", default=None, help="output folder (default output/)")
     args = ap.parse_args()
     if args.command == "train" and args.final_k is None:

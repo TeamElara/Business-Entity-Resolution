@@ -66,6 +66,31 @@ and file hashes when assembling the final zip.
 The final matcher scores only the pruned top-six,
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
+### Blocking artifacts (reverse search, orphan model, S1 no-match model)
+
+The five `src.blocking` commands above build the record- and S1-level inputs of `--extra` / `--cp2`.
+Run them in this order; each writes to `data/cand/` (8 GB Mac, 8 threads, peak RAM ~3 GB):
+
+| command | time | output |
+|---|---|---|
+| `reverse --split train` | 50–95 min | `rev_train.parquet` (103,176,312 rows: top 10 S1 per train S2/S3 record) |
+| `reverse --split test` | 25–40 min | `rev_test.parquet` (99,660,618 rows) |
+| `orphan` | 11 min | `orphan_{train,test}.parquet` (`rec_id, orphan_prob`; train out-of-fold), `orphan_auc.json` |
+| `orphan --group-by-s1` | 8–12 min | `orphan_train_grouped.parquet` (input of `s1_zero`), `orphan_auc_grouped.json` |
+| `s1_zero` | 7–10 min | `s1_zero_{train,test}.parquet` (`s1_id, p_zero`), `s1_zero_auc.json` |
+
+The first command also learns `data/cand/script_token_map_v2.json` (Indic token map) from the
+non-validation training pairs; a fresh clone re-learns a byte-identical map. Expected OOF AUCs:
+orphan 0.9736, s1_zero 0.984–0.985 (see `docs/orphan_model.md`).
+
+Reproducibility: the final files were built with the rank fix of PR #10 (exact score ties broken by
+`s1_id`, countries in sorted order); with it the reverse-search files are byte-identical across
+machines (`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…). The orphan and s1_zero LightGBM
+models use all cores (`num_threads=0`), so on a machine with another core count their files can
+differ slightly (same AUC). To reproduce the submitted file exactly, use the shipped `data/cand`
+files (`orphan_test`, `s1_zero_test`, `rev_test`) together with the final models. PR #8 (not in the
+final) pins the LightGBM threads and the row order for fully deterministic rebuilds.
+
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
 succeeded. On the earlier `main` at `00c5bc7` with Python 3.12.14, the no-data
 toy self-test passed. Before normalization, `pytest` reported 85 passed and
