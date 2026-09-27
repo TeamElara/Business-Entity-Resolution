@@ -86,12 +86,16 @@ orphan 0.9736 and rebuilt s1_zero 0.98397 (see `docs/orphan_model.md`).
 
 Reproducibility: the final files were built with the rank fix of PR #10 (exact score ties broken by
 `s1_id`, countries in sorted order); with it the reverse-search files are byte-identical across
-machines (`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…). The orphan and s1_zero LightGBM
-models use all cores (`num_threads=0`), so on a machine with another core count their files can
-differ slightly (same AUC). The source-only zip does **not** contain generated `data/cand` artifacts
-or trained models; an independent raw-data rerun can therefore be methodologically reproducible
-without proving byte-identical TSVs. PR #8 (not in the final) pins the auxiliary LightGBM threads
-and row order for a more deterministic rebuild. Ojaswi's backup reproduction is pending.
+machines (`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…). In a fresh clone of frozen
+`6eb608f`, rescoring from the saved test cache reproduced **both final TSVs byte-for-byte**. A
+separate fresh-clone run on a second machine rebuilt the test cache from raw data and reproduced
+**5,551,112 of 5,551,113 matched pairs**. The one different pair fell at the top-six candidate
+cutoff because of floating-point differences between machines; that end-to-end run was therefore
+not byte-identical. The orphan and `s1_zero` LightGBM models use all cores (`num_threads=0`), so
+their rebuilt files can also differ slightly across machines. PR #8 (not in the final) pins the
+auxiliary LightGBM threads and row order for a more deterministic rebuild. The source-only zip
+does **not** include the saved test cache, generated `data/cand` artifacts, or trained models;
+the exact rescore check requires those saved artifacts separately.
 
 Windows fresh-clone smoke checks on the preceding `main` at `25da840`
 (Python 3.12.14) passed the pinned install, **87 tests**, the self-test,
@@ -121,9 +125,9 @@ public leaderboard upload should be recorded from the same final run.
 Frozen `main` at `6eb608f` includes equal-score reverse-search ties broken
 by S1 ID and writer ties broken by candidate ID. The final matcher uses a
 fixed LightGBM seed and eight threads (`src/matching/v1.py`); the auxiliary
-orphan and `s1_zero` models still use all cores. Ojaswi is independently
-reproducing the final TSVs from a fresh clone and comparing MD5s; her result
-is pending.
+orphan and `s1_zero` models still use all cores. The saved-cache rescore
+reproduced both TSVs exactly; the independent raw-data rebuild differed by
+one matched pair at the top-six candidate cutoff, as detailed above.
 
 ## 3. Required zip layout
 

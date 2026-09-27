@@ -22,6 +22,11 @@ on all 1,732,544 test S1s. See `RUN.md` beside this README for the
 raw-data-to-output sequence and `Documentation_template.md` at the zip root
 for the methodology, score progression, and experiment decisions.
 
+A fresh-clone rescore using the saved test cache reproduced both final TSVs
+byte-for-byte. A second-machine fresh-clone run rebuilding the cache from raw
+data reproduced 5,551,112 of 5,551,113 matched pairs; one pair differed at
+the top-six candidate cutoff due to cross-machine floating-point differences.
+
 To build the organizer's zip **after** placing the exact validated TSV pair
 in `output/`, run `bash scripts/make_submission.sh output/`. This excludes
 raw data, caches, and local models. The packaging script checks headers and
