@@ -45,7 +45,8 @@ FEATURES = [
     "rev_best", "rev_second", "rev_gap", "rev_n50", "rev_n70", "rev_n90", "rev_best_word", "rev_best_namenum", "rev_n",
 ]
 PARAMS = dict(objective="binary", learning_rate=0.08, num_leaves=127, min_data_in_leaf=500,
-              feature_fraction=0.9, bagging_fraction=0.8, bagging_freq=1, verbose=-1, num_threads=0)
+              feature_fraction=0.9, bagging_fraction=0.8, bagging_freq=1, verbose=-1,
+              num_threads=8, deterministic=True, force_row_wise=True)  # same result on every machine
 
 
 def record_frame(split: str) -> pl.DataFrame:

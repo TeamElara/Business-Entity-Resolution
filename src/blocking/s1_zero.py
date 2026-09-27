@@ -39,7 +39,8 @@ FEATURES = [
     "r1_exp_matched", "r1_min_orphan", "r1_n_orphan_lt50",
 ]
 PARAMS = dict(objective="binary", learning_rate=0.05, num_leaves=63, min_data_in_leaf=300,
-              feature_fraction=0.9, bagging_fraction=0.8, bagging_freq=1, verbose=-1, num_threads=0)
+              feature_fraction=0.9, bagging_fraction=0.8, bagging_freq=1, verbose=-1,
+              num_threads=8, deterministic=True, force_row_wise=True)  # same result on every machine
 
 
 def s1_frame(split: str) -> pl.DataFrame:
