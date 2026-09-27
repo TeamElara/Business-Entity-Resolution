@@ -101,6 +101,7 @@ def main() -> None:
     tr = build("train", "orphan_train_grouped.parquet")
     gt = load_ground_truth().select("s1_id", (pl.col("matched_ids").list.len() == 0).cast(pl.Int8).alias("y"))
     tr = tr.join(gt, on="s1_id", how="left").with_columns(pl.col("y").fill_null(1))
+    tr = tr.sort("s1_id")  # joins do not keep row order; bagging samples by row, so fix the order
     fold = np.array([zlib.crc32(x.encode()) % 5 for x in tr["s1_id"].to_list()])
     X, y = tr.select(FEATURES).to_numpy().astype(np.float32), tr["y"].to_numpy()
     rate = float(y.mean())
@@ -124,7 +125,7 @@ def main() -> None:
     imp = sorted(zip(FEATURES, full.feature_importance("gain")), key=lambda x: -x[1])
     tot = sum(g for _, g in imp)
     print("top features:", [(n, round(g / tot, 3)) for n, g in imp[:10]], flush=True)
-    te = build("test", "orphan_test.parquet")
+    te = build("test", "orphan_test.parquet").sort("s1_id")
     prob = full.predict(te.select(FEATURES).to_numpy().astype(np.float32)).astype(np.float32)
     pl.DataFrame({"s1_id": te["s1_id"], "p_zero": prob}).write_parquet(CAND_DIR / "s1_zero_test.parquet")
     tc = te["country"].to_numpy()

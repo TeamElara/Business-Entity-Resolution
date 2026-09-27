@@ -155,6 +155,7 @@ def main() -> None:
     # every record belongs to at most one S1 in the ground truth
     owner = truth_pairs(load_ground_truth()).select(pl.col("cand_id").alias("rec_id"), "s1_id").unique("rec_id")
     tr = tr.join(owner, on="rec_id", how="left").with_columns(pl.col("s1_id").is_null().cast(pl.Int8).alias("y"))
+    tr = tr.sort("rec_id")  # joins do not keep row order; bagging samples by row, so fix the order
     fold_key = tr["s1_id"].fill_null(tr["rec_id"]) if args.group_by_s1 else tr["rec_id"]
     fold = np.array([zlib.crc32(x.encode()) % 5 for x in fold_key.to_list()])
     X, y = tr.select(FEATURES).to_numpy().astype(np.float32), tr["y"].to_numpy()
@@ -192,7 +193,7 @@ def main() -> None:
     tot = sum(g for _, g in imp)
     print("top features:", [(n, round(g / tot, 3)) for n, g in imp[:12]], flush=True)
     del tr, X
-    te = build("test")
+    te = build("test").sort("rec_id")
     prob = full.predict(te.select(FEATURES).to_numpy().astype(np.float32))
     pl.DataFrame({"rec_id": te["rec_id"], "orphan_prob": prob.astype(np.float32)}).write_parquet(CAND_DIR / "orphan_test.parquet")
     rate = float(y.mean())
