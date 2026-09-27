@@ -80,8 +80,9 @@ orphan 0.9736, s1_zero 0.984–0.985 (see `docs/orphan_model.md`).
 Reproducibility: with the deterministic code (PR #8: exact score ties broken by `s1_id`; orphan
 and s1_zero LightGBM with `num_threads=8, deterministic=True, force_row_wise=True`), a rebuild from
 raw data gives byte-identical files: the reverse-search files matched md5 across two machines
-(`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…), and orphan -> s1_zero run twice on one
-machine gave identical md5s. The earlier code (26 Sep) reproduced every score, but the order of
+(`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…), and the orphan files matched md5 across two
+runs. s1_zero also needs its training rows in a fixed order (joins do not keep row order and
+LightGBM bagging samples by position); PR #8 sorts the rows by id, re-check pending. The earlier code (26 Sep) reproduced every score, but the order of
 exactly tied S1 and the LightGBM result with all cores (`num_threads=0`) could differ between runs
 or machines. To reproduce the submitted file exactly, use the `data/cand` files built with the same
 code as the final model.
