@@ -28,7 +28,7 @@ The audit found zero `l'`/`d'` names in these files (their addresses are common)
 Rows can match more than one pattern, and potential-gap counts are heuristic;
 the same business appearing in several source rows is counted several times.
 
-## Candidate actions for v4, not changes to the selected v2 run
+## Candidate actions for a later run, not changes to the selected v3/CP2 run
 
 1. Test a **France-only `rte` → `route`** address expansion. It is an exact
    street-type abbreviation and leaves US/India normalization unchanged.
@@ -47,8 +47,7 @@ the same business appearing in several source rows is counted several times.
 
 Any accepted fix requires targeted tests, full normalization regression
 checks (including unchanged US/India outputs), and a new model/test run before
-the final submission. Do not silently apply it to the already selected v2
-outputs.
+submission. Do not silently apply it to the current v3/CP2 outputs.
 
 The isolated [v4 candidate PR #4](https://github.com/TeamElara/Business-Entity-Resolution/pull/4)
 implements only the France-specific `Rte.` and `EI` changes. On regenerated
@@ -56,3 +55,7 @@ test normalization, all US/India source/country row counts and full-row
 hash checksums match the prior outputs exactly. France `addr_norm` changes
 for 398 S1 / 5,781 S2 / 5,812 S3; `name_core`/`legal_suffix` change for
 4,183 S1 / 7,339 S2 / 7,435 S3. No model/leaderboard improvement is claimed.
+PR #4 was closed before the 27 September final freeze: testing it through
+normalization, feature building, training and test would require a full
+rebuild. It remains a verified **label-free** candidate for future work, not
+a verified matching-score improvement and not part of the final run.
