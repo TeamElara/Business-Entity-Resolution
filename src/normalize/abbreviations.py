@@ -102,3 +102,25 @@ def normalize_address_expr(raw: pl.Expr, country: pl.Expr) -> pl.Expr:
         expand_tokens(clean_text(french_streets), FRANCE_ADDRESS_ABBREVIATIONS)
     )
     return pl.when(key == "france").then(french).otherwise(generic)
+
+
+def normalize_address_v2_expr(raw: pl.Expr, country: pl.Expr) -> pl.Expr:
+    """Opt-in address text without unit and house-marker noise.
+
+    Keep the original addr_norm for the current model. This alternate field
+    can be evaluated as a feature before it is used in candidate generation.
+    """
+    text = normalize_address_expr(raw, country)
+    without_units = (
+        text.str.replace_all(
+            r"(?i)(^| )(?:apartment|apt|unit|suite|flat|floor|flr|batiment|bat|etage)\s+[#]?[a-z0-9-]{1,8}( |$)",
+            "${1}${2}",
+        )
+        .str.replace_all(r"\s+", " ")
+        .str.strip_chars()
+    )
+    france = country.cast(pl.String).fill_null("").str.to_lowercase() == "france"
+    without_marker = without_units.str.replace_all(
+        r"(?i)(^| )n(?:o)?\s+(\d{1,7})( |$)", "${1}${2}${3}"
+    ).str.replace_all(r"\s+", " ").str.strip_chars()
+    return pl.when(france).then(without_marker).otherwise(without_units)
