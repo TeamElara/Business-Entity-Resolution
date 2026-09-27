@@ -77,12 +77,14 @@ The first command also learns `data/cand/script_token_map_v2.json` (Indic token 
 non-validation training pairs; a fresh clone re-learns a byte-identical map. Expected OOF AUCs:
 orphan 0.9736, s1_zero 0.984–0.985 (see `docs/orphan_model.md`).
 
-Reproducibility: a rebuild from raw data reproduces every reverse-search score, and the orphan
-files bit for bit. With the code of 26 Sep, the order of exactly tied S1 (identical S1 text, same
-score) can change between runs, which moves `rank` and therefore `p_zero` slightly; the
-deterministic tie-break (PR #8, ties broken by `s1_id`) makes repeated runs byte-identical (checked
-on France test). To reproduce the submitted file exactly, use the `data/cand` files that were
-built with the same code as the final model.
+Reproducibility: with the deterministic code (PR #8: exact score ties broken by `s1_id`; orphan
+and s1_zero LightGBM with `num_threads=8, deterministic=True, force_row_wise=True`), a rebuild from
+raw data gives byte-identical files: the reverse-search files matched md5 across two machines
+(`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…), and orphan -> s1_zero run twice on one
+machine gave identical md5s. The earlier code (26 Sep) reproduced every score, but the order of
+exactly tied S1 and the LightGBM result with all cores (`num_threads=0`) could differ between runs
+or machines. To reproduce the submitted file exactly, use the `data/cand` files built with the same
+code as the final model.
 
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
 succeeded. On current `main` at `00c5bc7` with Python 3.12.14, the no-data
