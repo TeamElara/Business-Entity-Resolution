@@ -5,27 +5,25 @@ each S1 searched against the **full** same-country train S2+S3 pool, measured wi
 `src/common/metrics.py::blocking_report`. "Oracle ceiling" is the macro F0.5 a perfect matcher
 would reach with the candidate set (precision 1, recall = candidates ∩ truth / truth).
 
-## Where blocking sits in the final pipeline
+## Where blocking sits in the selected v2 pipeline
 
 ```
                    per country (labels read from S1, never a fixed list)
  S1 ──┐
       ├─ text preparation (text.py) ──┬─ word      : TF-IDF on "name address"        top 20 ─┐
 S2+S3 ┘                               ├─ skel      : TF-IDF on skeleton text         top 20  │
-                                      ├─ noaddr    : name skeleton vs pool w/o addr  top 10  ├─ stage 1 (wide, internal)
-                                      ├─ namenum   : name + address numbers          top 10  │
-                                      ├─ concat    : joined name (char 3-grams) vs
-                                      │              domain-like pool names           top 5   │
-                                      ├─ namehouse : name + whole house numbers       top 5   │
-                                      └─ (matching: name char-4gram, address 1-2gram)       ─┘
+                                      └─ noaddr    : name skeleton vs pool w/o addr  top 10  ├─ stage 1 (wide, internal)
+                         matching: name char-4gram and address word 1-2gram TF-IDF ────────┘
                                                            │
                               pruner (src/matching) → final candidate set = candidate_pairs.tsv
                                                            │
                               final model scores exactly that set → matching_results.tsv
 ```
 
-The blocks of this package form the wide stage 1 together with the two TF-IDF blocks of
-`src/matching`. They are exposed as `stage1.BLOCKS` (text column, pool filter, top-k, max_df),
+In the measured matching v2 run, only `word`, `skel`, and `noaddr` join the two
+TF-IDF blocks from `src/matching`; `namenum`, `concat`, and `namehouse` are standalone
+follow-up experiments (top 10, 5, and 5 respectively), not part of that v2 score. The available blocks are
+exposed as `stage1.BLOCKS` (text column, pool filter, top-k, max_df),
 `stage1.prepare()` (all text columns for one source file and country) and `stage1.topk_block()`.
 The cut to the final candidate set is done by the matching pruner.
 

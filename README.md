@@ -235,10 +235,14 @@ analysis and all numbers: `docs/blocking.md`.
   `namenum` (name + address numbers), `concat` (joined name, char 3-grams, vs domain-like names),
   `namehouse` (name + whole house numbers such as `J-52/4`).
   `prepare(split, source, country, tmap)` builds every text column; `topk_block()` scores one block.
-  The matching pipeline (`src/matching/v2.py`) imports these blocks for its stage 1.
+  Matching v3 imports all six; v2 used only `word`, `skel`, and `noaddr`.
 
-Full validation (220,907 S1, full same-country pools): pair recall **0.984**, oracle F0.5
-**0.9951** at 48.3 candidates/S1 (US 0.990, India 0.976).
+Separate all-six-Ojaswi-block validation with the zero-width-joiner fix used
+by v3 (220,907 S1, full same-country pools): pair recall **0.9849**, oracle
+F0.5 **0.9953** at 48.3 candidates/S1 (US recall 0.990, India 0.9773).
+The prior measurement was 0.984 recall and 0.9951 oracle before that fix.
+These are Ojaswi's standalone stage-1 figures, **not** v3's larger union
+with Arihant's two matching blocks or its pruned final set.
 
 ```bash
 # stage-1 pairs + prepared text for val S1 (writes data/cand/stage1_train_val.parquet, prep_train_val.parquet)
@@ -251,32 +255,51 @@ python -m src.blocking.stage1 --split train --countries India --val-only --tag _
 `features.py`, `pruner.py` and `run.py` are an alternative stage 2 (own LightGBM pruner) that was
 evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
-## Confirmed upload #2 and final package
+## V3 candidate pipeline and final package
 
-The latest **confirmed uploaded** solution in `docs/submission_log.md` is
-matching v1 (validation macro F0.5 0.9525, public leaderboard 0.919).
-With pinned dependencies installed and `data/raw` set up as above, its
-documented raw-data-to-output commands are:
+The latest reported public leaderboard score is **0.933** from upload #5,
+v3 with orphan and reverse-search features at `t=0.85` (up from v2's 0.924).
+This is a provisional public result; CP2's first upload and the final pick are
+pending. V3 adds all six
+of Ojaswi's stage-1 blocks to Arihant's two blocks. A LightGBM pruner keeps
+at most six candidates per S1 with probability at least 0.003 (reported
+validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
+per-S1, orphan-probability and reverse-search features. The CP2 candidate
+also uses Ojaswi's S1 no-match probability (`p_zero`; grouped OOF AUC 0.9849,
+India 0.9781, US 0.9885) and legal-form agreement. The `p_zero` model is
+documented in `docs/orphan_model.md`.
+Reported validation macro F0.5 rises from v3 base 0.9709 to + orphan 0.9731,
++ reverse search **0.9739** (India 0.9709, US 0.9759), then CP2 **0.9766**
+(India 0.9740, US 0.9782). CP2's planned first upload uses `t=0.85`,
+`t1=0.5` and the one-record-to-one-S1 decision rule. These are **validation**
+figures, not CP2 public/private leaderboard scores. With pinned
+dependencies installed and `data/raw` set up as above,
+the draft v3 raw-data-to-output commands are:
 
 ```powershell
 python -m src.normalize.run --split all
-python -m src.matching.v1 features
-python -m src.matching.v1 prune
-cp data/models/v1_pruner_0.txt data/models/v1_pruner_pm_0.txt
-cp data/models/v1_pruner_1.txt data/models/v1_pruner_pm_1.txt
-python -m src.matching.v1 train --tag pm --p-min 0.003
-python -m src.matching.v1 test --tag pm
+python -m src.blocking.reverse --split train
+python -m src.blocking.reverse --split test
+python -m src.blocking.orphan
+python -m src.blocking.orphan --group-by-s1
+python -m src.blocking.s1_zero
+python -m src.matching.v3 features
+python -m src.matching.v3 prune
+python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
+python -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
+python -m src.matching.v3 rescore --tag cp2 --t 0.85 --t1 0.5
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-The v1 cascade is wide retrieval → LightGBM pruner → final candidate list
-(`candidate_pairs.tsv`) → separate final LightGBM matcher, which scores
-exactly that list. `docs/matching_v1.md` has the measured features, cutoff,
-validation, error analysis, and transfer checks. The methodology in
-`Documentation_template.md` describes upload #2 and distinguishes Ojaswi's
-not-yet-uploaded multi-block alternative. If a later model/blocker wins,
-replace these commands and verify the **exact final** outputs, candidate
-statistics, and document before creating the submission zip.
+`cp2` is a provisional local model tag; reconcile it with the exact final
+tag after Arihant freezes the run. The pruned candidate list is written to
+`candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
+Test decisions assign each S2/S3 record to at most one S1, with provisional
+`t=0.85` and `t1=0.5`.
+`RUN.md` lists the clean-machine checks and required zip layout. The final
+test outputs, validator result, and leaderboard score must all come from the
+same run. Historical v2 and v1 measurements remain in `docs/matching_v2.md`
+and `docs/matching_v1.md`.
 
 ## Team ownership
 
