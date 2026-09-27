@@ -2,6 +2,30 @@
 
 Team solution for the Amazon ML Challenge 2026.
 
+## Submission at a glance
+
+The current CP2 pipeline normalizes the supplied S1/S2/S3 records, unions
+Ojaswi's six retrieval blocks with Arihant's two, then uses a LightGBM pruner
+to keep at most six S2/S3 candidates per S1 at probability ≥0.003. A separate
+LightGBM matcher scores **only those submitted candidates** using pair,
+per-S1, orphan, reverse-search, S1 no-match, and legal-form features. The
+decision assigns each S2/S3 record to at most one S1 and uses thresholds
+US 0.95, India/France 0.90, with fallback `t1=0.5`. A final US 0.965
+threshold probe may change this at the freeze.
+
+The team reports validation macro F0.5 **0.9766** and best public leaderboard
+**0.946** so far; the private score is unknown. The current 0.946 output has 5.37
+candidates and 3.20 matches per S1, with 5.5% of S1s unmatched. The two
+submitted TSVs passed `utils/validate_submission.py --check-ids`, according
+to the producing machine. See `RUN.md` beside this README for the
+raw-data-to-output sequence and `Documentation_template.md` at the zip root
+for the methodology, score progression, and experiment decisions.
+
+To build the organizer's zip **after** placing the exact validated TSV pair
+in `output/`, run `bash scripts/make_submission.sh output/`. This excludes
+raw data, caches, and local models. The packaging script checks headers and
+zip integrity; run the validator on the final TSVs before packaging.
+
 ## Local setup
 
 Python 3.11+ (pins in `requirements.txt` install on 3.11 and newer).
@@ -17,6 +41,7 @@ macOS / Linux:
 python3.11 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 brew install libomp          # macOS only, needed by LightGBM
+mkdir -p data
 ln -s /path/to/student_resource/dataset data/raw
 ```
 
@@ -68,7 +93,7 @@ python -m src.common.data_check   # row counts, val split, scorer sanity on real
 Validate outputs before uploading:
 
 ```bash
-python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test
+python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
 Organizer updates are in `docs/organizer_updates.md`; uploads are logged in `docs/submission_log.md`.
@@ -255,33 +280,35 @@ python -m src.blocking.stage1 --split train --countries India --val-only --tag _
 `features.py`, `pruner.py` and `run.py` are an alternative stage 2 (own LightGBM pruner) that was
 evaluated but is not part of the final pipeline; see `docs/blocking.md`.
 
-## V3 candidate pipeline and final package
+## CP2 pipeline and final package
 
-The latest team-reported public leaderboard score is **0.946** for CP2 with
+The best team-reported public leaderboard score so far is **0.946** for CP2 with
 US `t=0.95` and India/France `t=0.90`. CP2 scored 0.943 at `t=0.85` and
 0.944 at `t=0.90`; preceding v3 upload #5 scored 0.933 at `t=0.85`
-(up from v2's 0.924). The final pick and private score remain pending.
+(up from v2's 0.924). The private score is unknown.
 V3 adds all six
 of Ojaswi's stage-1 blocks to Arihant's two blocks. A LightGBM pruner keeps
 at most six candidates per S1 with probability at least 0.003 (reported
 validation: 5.05 candidates/S1, oracle F0.5 0.9938). The final matcher adds
 per-S1, orphan-probability and reverse-search features. The CP2 candidate
-also uses Ojaswi's S1 no-match probability (`p_zero`; grouped OOF AUC 0.9849,
-India 0.9781, US 0.9885) and legal-form agreement. The `p_zero` model is
+also uses Ojaswi's S1 no-match probability (`p_zero`) and legal-form
+agreement. Its original grouped OOF AUC was 0.9849; the deterministic
+reverse-rank rebuild used for `cp2d` measured 0.9840 (PR #8). The model is
 documented in `docs/orphan_model.md`.
 Reported validation macro F0.5 rises from v3 base 0.9709 to + orphan 0.9731,
 + reverse search **0.9739** (India 0.9709, US 0.9759), then CP2 **0.9766**
 (India 0.9740, US 0.9782). Legal-form agreement recovers information
 hidden when forms such as SARL and SAS are removed from `name_core`.
-The validation-best primary threshold was `t=0.75`; the test setting
-`t=0.85` yields about 3.3 predictions/S1, nearer the label-free estimate
-of 3.47 true test matches/S1. A v2 threshold probe improved public LB
-from 0.918 to 0.924, and v3 at `t=0.85` reached 0.933. The provisional
-CP2 country decision uses US `t=0.95`, India/France `t=0.90`, and the
-one-record-to-one-S1 decision rule. The 0.9766 figure is **validation**;
+The validation-best primary threshold was `t=0.75`; the earlier test setting
+`t=0.85` gave about 3.3 predictions/S1. Ojaswi's label-free check found US
+predictions at the full estimated true-match count with many orphan-like
+matches, supporting a stricter US threshold. The current decision uses
+US `t=0.95`, India/France `t=0.90`, fallback `t1=0.5`, and the
+one-record-to-one-S1 rule; it yields 3.20 predictions/S1 and 5.5% unmatched.
+The 0.9766 figure is **validation**;
 0.943/0.944/0.946 are **public** scores, not private scores. With pinned
 dependencies installed and `data/raw` set up as above,
-the draft v3 raw-data-to-output commands are:
+the CP2 build stages are:
 
 ```powershell
 python -m src.normalize.run --split all
@@ -292,26 +319,32 @@ python -m src.blocking.orphan --group-by-s1
 python -m src.blocking.s1_zero
 python -m src.matching.v3 features
 python -m src.matching.v3 prune
-python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
-python -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
-python -m src.matching.v3 rescore --tag cp2d --t 0.90 --t-country US=0.95
+python -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2d
+python -m src.matching.v3 test --tag cp2d --t 0.90 --t-country US=0.95
 python utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir data/raw/test --check-ids
 ```
 
-The `cp2d` rescore command is Arihant's provisional selection. Its
-`--t-country` flag was still being added when this draft was updated; the
-earlier `cp2` train/test steps do not establish a `cp2d` cache. Reconcile
-the whole command sequence with the exact final run after the freeze.
+The `test` command builds the stage-1/pruner cache and writes both TSVs. If
+the cache already exists, `python -m src.matching.v3 rescore --tag cp2d --t
+0.90 --t-country US=0.95` runs only the final scoring and decision step.
+Arihant reports that the `--t-country` code is local at `4e92cb0` but had
+not landed on `main` when this draft was updated. Confirm the frozen US
+threshold (0.95 or 0.965) and use that exact command after the freeze.
 The pruned candidate list is written to
 `candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
-Test decisions assign each S2/S3 record to at most one S1, with provisional
+Test decisions assign each S2/S3 record to at most one S1, with selected
 US `t=0.95` and India/France `t=0.90`.
 In a sampled manual review of about 200 France S1s (about 1,250 candidate
 pairs), the team reports precision on unambiguous predicted matches rising
 from about 0.90 for v1 to 0.958 for v3. This is not a France F0.5 score.
 The isolated French `Rte.`/`EI` changes in closed PR #4 passed label-free
 regression checks but are not in the final run; they need a full rebuild and
-model validation before use.
+model validation before use. PR #6's `house_no2` feature scored 0.9763 versus
+0.9766 without it, so it is also excluded. Three-seed ensembling added no
+gain; top-eight candidates added about 0.0005 validation F0.5 at a larger
+candidate-file cost; additional orphan/`p_zero` decision rules lowered
+validation F0.5. PR #5's optional stage-1 speed-up produced identical checked
+outputs but was not used.
 `RUN.md` lists the clean-machine checks and required zip layout. The final
 test outputs, validator result, and leaderboard score must all come from the
 same run. Historical v2 and v1 measurements remain in `docs/matching_v2.md`

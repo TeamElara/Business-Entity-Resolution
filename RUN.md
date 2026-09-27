@@ -1,13 +1,14 @@
-# Reproduce the CP2 candidate run and assemble the submission (draft)
+# Reproduce the selected CP2 run and assemble the submission
 
 This is the raw-data-to-output guide for the **CP2 candidate** as of 27
 September 2026: v3 + orphan/reverse features + Ojaswi's S1 no-match score
-(`p_zero`) + legal-form agreement. `cp2` is a provisional model tag; replace
-it with the exact selected tag at the 27 September 4 PM freeze. CP2's reported
+(`p_zero`) + legal-form agreement. The final rebuilt model tag is `cp2d`; the
+frozen commit and output-file MD5s are recorded in `Documentation_template.md`
+after the 27 September 4 PM freeze. CP2's reported
 validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). Arihant reports
 public LB 0.943 at `t=0.85`, 0.944 at `t=0.90`, and 0.946 with US `t=0.95`
-and India/France `t=0.90`. The final pick and private score are pending.
-The provisional test decision uses those country thresholds, with each S2/S3 record
+and India/France `t=0.90`. The private score is unknown.
+The selected test decision uses those country thresholds, with each S2/S3 record
 assigned to at most one S1. Do not package until the exact final test files
 pass the validator and match the selected leaderboard upload.
 
@@ -34,9 +35,8 @@ $env:DATA_RAW = "C:\path\to\student_resource\dataset"
 .\.venv\Scripts\python.exe -m src.blocking.s1_zero
 .\.venv\Scripts\python.exe -m src.matching.v3 features
 .\.venv\Scripts\python.exe -m src.matching.v3 prune
-.\.venv\Scripts\python.exe -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2
-.\.venv\Scripts\python.exe -m src.matching.v3 test --tag cp2 --t 0.85 --t1 0.5
-.\.venv\Scripts\python.exe -m src.matching.v3 rescore --tag cp2d --t 0.90 --t-country US=0.95
+.\.venv\Scripts\python.exe -m src.matching.v3 train --final-k 6 --extra --cp2 --rounds 12000 --tag cp2d
+.\.venv\Scripts\python.exe -m src.matching.v3 test --tag cp2d --t 0.90 --t-country US=0.95
 .\.venv\Scripts\python.exe utils/validate_submission.py --matching output/matching_results.tsv --candidate output/candidate_pairs.tsv --test-dir "$env:DATA_RAW\test" --check-ids
 ```
 
@@ -56,11 +56,13 @@ the reverse files. It writes `s1_zero_{train,test}.parquet` with `p_zero`.
 `--cp2` then reads those two S1 files and derives legal-form agreement from
 the normalized records. Check that all these artifacts exist before training;
 missing extra features may be filled with nulls rather than causing a hard
-failure. The `test` command first builds the full test candidate cache; the
-explicit `rescore` command is Arihant's provisional choice for a `cp2d`
-cache, which the earlier `cp2` test step does not produce. The `--t-country`
-flag was still being added when this draft was updated. After the freeze,
-replace the train/test commands with the exact steps that produced `cp2d`.
+failure. The `test` command builds `data/cache/v3_test` from stage 1 and the
+pruner, then scores the `cp2d` model and writes both TSVs. If that cache
+already exists, `python -m src.matching.v3 rescore --tag cp2d --t 0.90
+--t-country US=0.95` repeats only the last step. Arihant reports that the
+`--t-country` code is local at `4e92cb0` but not on `main` yet. The freeze
+probe may change the US threshold from 0.95 to 0.965; use the frozen setting
+and file hashes when assembling the final zip.
 The final matcher scores only the pruned top-six,
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
@@ -101,14 +103,21 @@ test on a clean machine, run `python -m src.matching.v3 --help`,
 
 ## 2. Validate the final files
 
+The selected run's reported test statistics are 5.37 candidates/S1 (France
+5.66, India 5.37, US 5.28), 3.20 matches/S1, and 5.5% S1s without a match.
+No-candidate S1 counts are France 177, India 1,521, US 1,126. Arihant reports
+validator **PASS** with `--check-ids` for the selected files.
+
 `output/matching_results.tsv` and `output/candidate_pairs.tsv` must each have
 one row for every test Source 1 ID, including empty rows and France. Every
 matched S2/S3 ID must exist in that S1's candidate list. The validator must
 report PASS with `--check-ids`; its result, test candidate statistics, and
 public leaderboard upload should be recorded from the same final run.
-Also confirm that the frozen reverse-search code breaks equal-score ties by
-S1 ID, as reported for the team's final retrain, before claiming deterministic
-reverse ranks in the methodology.
+The final-code review must confirm equal-score reverse-search ties break by
+S1 ID and writer ties by candidate ID. Both are absent from current `main`
+`25da840`; PR #8 contains the reverse-rank change and is not merged as of
+this draft. LightGBM's thread count is fixed at eight in `src/matching/v1.py`.
+Ojaswi's independent full fresh-clone reproduction is due by 19:30.
 
 ## 3. Required zip layout
 
@@ -139,3 +148,18 @@ Confirm the package can regenerate both TSVs from the supplied train/test
 inputs using only its `code/business_entity_resolution/` directory. The
 methodology file must describe the same commit, candidate cutoff, models,
 and output files that were actually submitted.
+
+Once the exact selected TSVs are in `output/`, build the zip from the repo
+root with one command:
+
+```bash
+bash scripts/make_submission.sh output/
+```
+
+On Windows Git Bash, set `PYTHON` to the installed Python executable if it
+is not on `PATH`, for example
+`PYTHON=.venv/Scripts/python.exe bash scripts/make_submission.sh output/`.
+The script checks the two TSV headers, includes only tracked code/docs plus
+those TSVs, tests zip integrity, and prints the layout and size. It refuses
+to overwrite an existing `output/TeamElara_submission.zip`; move a previous
+dry-run archive before rebuilding. It does not replace the full validator.
