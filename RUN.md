@@ -77,15 +77,13 @@ The first command also learns `data/cand/script_token_map_v2.json` (Indic token 
 non-validation training pairs; a fresh clone re-learns a byte-identical map. Expected OOF AUCs:
 orphan 0.9736, s1_zero 0.984–0.985 (see `docs/orphan_model.md`).
 
-Reproducibility: with the deterministic code (PR #8: exact score ties broken by `s1_id`; orphan
-and s1_zero LightGBM with `num_threads=8, deterministic=True, force_row_wise=True`), a rebuild from
-raw data gives byte-identical files: the reverse-search files matched md5 across two machines
-(`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…), and the orphan files matched md5 across two
-runs. s1_zero also needs its training rows in a fixed order (joins do not keep row order and
-LightGBM bagging samples by position); PR #8 sorts the rows by id, re-check pending. The earlier code (26 Sep) reproduced every score, but the order of
-exactly tied S1 and the LightGBM result with all cores (`num_threads=0`) could differ between runs
-or machines. To reproduce the submitted file exactly, use the `data/cand` files built with the same
-code as the final model.
+Reproducibility: the final files were built with the rank fix of PR #10 (exact score ties broken by
+`s1_id`, countries in sorted order); with it the reverse-search files are byte-identical across
+machines (`rev_train` e7a85ab348a9…, `rev_test` 6c3efc043cbb…). The orphan and s1_zero LightGBM
+models use all cores (`num_threads=0`), so on a machine with another core count their files can
+differ slightly (same AUC). To reproduce the submitted file exactly, use the shipped `data/cand`
+files (`orphan_test`, `s1_zero_test`, `rev_test`) together with the final models. PR #8 (not in the
+final) pins the LightGBM threads and the row order for fully deterministic rebuilds.
 
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
 succeeded. On current `main` at `00c5bc7` with Python 3.12.14, the no-data
