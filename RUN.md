@@ -4,8 +4,8 @@ This is the raw-data-to-output guide for the **CP2 candidate** as of 26
 September 2026: v3 + orphan/reverse features + Ojaswi's S1 no-match score
 (`p_zero`) + legal-form agreement. `cp2` is a provisional model tag; replace
 it with the exact selected tag at the 27 September 4 PM freeze. CP2's reported
-validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). Its first public
-upload is planned for 9 AM; no public CP2 score or final pick is claimed here.
+validation macro F0.5 is 0.9766 (India 0.9740, US 0.9782). No public CP2
+score or final pick is claimed here until Arihant reports the exact upload.
 The provisional test decision is `t=0.85`, `t1=0.5`, with each S2/S3 record
 assigned to at most one S1. Do not package until the exact final test files
 pass the validator and match the selected leaderboard upload.
@@ -61,7 +61,7 @@ explicit `rescore` command uses that cache to produce the provisional
 probability ≥ 0.003 candidate set, then enforces one record per S1 assignment.
 
 Fresh-clone dry runs on Windows (26 Sep): the pinned dependency install
-succeeded. On current `main` at `00c5bc7` with Python 3.12.14, the no-data
+succeeded. On the earlier `main` at `00c5bc7` with Python 3.12.14, the no-data
 toy self-test passed. Before normalization, `pytest` reported 85 passed and
 one Hindi-map test failure because that test expects a gitignored trained map.
 The raw-data `src.normalize.run --split all` command then succeeded and wrote
@@ -71,11 +71,11 @@ Hindi tokens. The three test row counts match the earlier independent dry
 run. On this unpatched `main`, the v3, reverse-search and orphan `--help`
 commands fail on Windows with `ModuleNotFoundError: resource`.
 
-PR #3 makes the Hindi-map test self-contained and guards the Unix-only
-`resource` import. Its code, tested against the same pinned dependency set,
+Merged PR #3 (`5c36ad5`) makes the Hindi-map test self-contained and guards
+the Unix-only `resource` import. Its code, tested against the same pinned dependency set,
 passed 87 tests and `src.common.selftest`; the v3, reverse-search and orphan
 `--help` commands all succeeded. The full v3 training/test sequence above
-still requires a **new clean-clone run on final main** after merge and model
+still requires a **new clean-clone run on final main** after the model
 freeze; do not claim the current smoke check reproduces the final TSVs.
 
 The full raw-to-output v3 training/test sequence is **not yet verified** on
@@ -93,6 +93,9 @@ one row for every test Source 1 ID, including empty rows and France. Every
 matched S2/S3 ID must exist in that S1's candidate list. The validator must
 report PASS with `--check-ids`; its result, test candidate statistics, and
 public leaderboard upload should be recorded from the same final run.
+Also confirm that the frozen reverse-search code breaks equal-score ties by
+S1 ID, as reported for the team's final retrain, before claiming deterministic
+reverse ranks in the methodology.
 
 ## 3. Required zip layout
 

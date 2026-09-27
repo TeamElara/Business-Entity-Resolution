@@ -270,7 +270,13 @@ India 0.9781, US 0.9885) and legal-form agreement. The `p_zero` model is
 documented in `docs/orphan_model.md`.
 Reported validation macro F0.5 rises from v3 base 0.9709 to + orphan 0.9731,
 + reverse search **0.9739** (India 0.9709, US 0.9759), then CP2 **0.9766**
-(India 0.9740, US 0.9782). CP2's planned first upload uses `t=0.85`,
+(India 0.9740, US 0.9782). Legal-form agreement recovers information
+hidden when forms such as SARL and SAS are removed from `name_core`.
+The validation-best primary threshold was `t=0.75`; the test setting
+`t=0.85` yields about 3.3 predictions/S1, nearer the label-free estimate
+of 3.47 true test matches/S1. A v2 threshold probe improved public LB
+from 0.918 to 0.924, and v3 at `t=0.85` reached 0.933. The provisional
+CP2 decision uses `t=0.85`,
 `t1=0.5` and the one-record-to-one-S1 decision rule. These are **validation**
 figures, not CP2 public/private leaderboard scores. With pinned
 dependencies installed and `data/raw` set up as above,
@@ -296,6 +302,12 @@ tag after Arihant freezes the run. The pruned candidate list is written to
 `candidate_pairs.tsv`, and the final LightGBM scores **exactly** those pairs.
 Test decisions assign each S2/S3 record to at most one S1, with provisional
 `t=0.85` and `t1=0.5`.
+In a sampled manual review of about 200 France S1s (about 1,250 candidate
+pairs), the team reports precision on unambiguous predicted matches rising
+from about 0.90 for v1 to 0.958 for v3. This is not a France F0.5 score.
+The isolated French `Rte.`/`EI` changes in closed PR #4 passed label-free
+regression checks but are not in the final run; they need a full rebuild and
+model validation before use.
 `RUN.md` lists the clean-machine checks and required zip layout. The final
 test outputs, validator result, and leaderboard score must all come from the
 same run. Historical v2 and v1 measurements remain in `docs/matching_v2.md`
