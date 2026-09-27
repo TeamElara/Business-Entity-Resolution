@@ -29,20 +29,30 @@ REV_BLOCKS = ("word", "namenum")
 
 
 def reverse_chunk(p: pl.DataFrame, fitted: dict, k: int, n_threads: int) -> pl.DataFrame:
-    """Top-k S1 per pool record for one chunk: union of the blocks, ranked by the best score."""
+    """Top-k S1 per pool record for one chunk: union of the blocks, ranked by the best score.
+
+    Deterministic: exact score ties are broken by s1_id (ascending), inside each block and in the
+    final ranking. Each block asks for 2k neighbours so that the tie-break, not the order inside the
+    top-n search, decides which tied S1 make that block's top k.
+    """
     out = None
     for name, (vec, S1T, s1_ids, col) in fitted.items():
-        R = sp_matmul_topn(vec.transform(p[col].to_list()), S1T, top_n=k, threshold=0.0,
+        R = sp_matmul_topn(vec.transform(p[col].to_list()), S1T, top_n=2 * k, threshold=0.0,
                            n_threads=n_threads).tocoo()
-        b = pl.DataFrame({
-            "rec_id": p["entity_id"].gather(R.row.astype(np.int64)),
-            "s1_id": s1_ids.gather(R.col.astype(np.int64)),
-            f"s_{name}": R.data.astype(np.float32),
-        })
+        b = (
+            pl.DataFrame({
+                "rec_id": p["entity_id"].gather(R.row.astype(np.int64)),
+                "s1_id": s1_ids.gather(R.col.astype(np.int64)),
+                f"s_{name}": R.data.astype(np.float32),
+            })
+            .sort(["rec_id", f"s_{name}", "s1_id"], descending=[False, True, False])
+            .filter(pl.int_range(pl.len()).over("rec_id") < k)
+        )
         out = b if out is None else out.join(b, on=["rec_id", "s1_id"], how="full", coalesce=True)
     return (
         out.with_columns(pl.max_horizontal(*[f"s_{b}" for b in fitted]).alias("score"))
-        .with_columns(pl.col("score").rank("ordinal", descending=True).over("rec_id").cast(pl.Int16).alias("rank"))
+        .sort(["rec_id", "score", "s1_id"], descending=[False, True, False])
+        .with_columns((pl.int_range(pl.len()).over("rec_id") + 1).cast(pl.Int16).alias("rank"))
         .filter(pl.col("rank") <= k)
         .select("rec_id", "s1_id", "score", "rank", *[f"s_{b}" for b in fitted])
     )
@@ -59,7 +69,7 @@ def main() -> None:
 
     t0 = time.time()
     tmap = load_script_map()
-    countries = args.countries or list_countries(args.split)
+    countries = args.countries or sorted(list_countries(args.split))
     path = CAND_DIR / f"rev_{args.split}.parquet"
     tmp = path.with_suffix(".parquet.partial")
     writer, n_rows = None, 0
